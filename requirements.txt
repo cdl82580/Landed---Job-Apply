@@ -14,3 +14,4 @@ slack-bolt==1.28.0
 cryptography==48.0.1
 botbuilder-core==4.17.1
 aiohttp==3.14.1
+chainlit==2.11.0

@@ -94,6 +94,7 @@ from pathlib import Path
 from queue import Empty, Queue
 from typing import Any
 
+from chainlit.utils import mount_chainlit
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -550,6 +551,11 @@ app.include_router(kb_router)
 app.include_router(notifications_router)
 app.include_router(teams_router)
 
+# KB support chatbot widget — mounted in-process (same machine, same origin,
+# same session cookie) rather than as a separate Fly process. See
+# chainlit_app.py for the auth bridge and KB-grounded chat logic.
+mount_chainlit(app=app, target="chainlit_app.py", path="/chat")
+
 
 @app.on_event("startup")
 async def _on_startup():
@@ -566,9 +572,16 @@ async def _on_startup():
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
+    # The Chainlit Copilot widget iframes its own /chat/* routes from our own
+    # pages (e.g. tracking.html embeds /chat/copilot) — same-origin, but still
+    # blocked by frame-ancestors 'none' or X-Frame-Options: DENY, since those
+    # forbid framing by anyone, including self. Relax just that prefix to
+    # same-origin framing; every other path keeps the strict default.
+    is_chat = request.url.path.startswith("/chat")
     response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    response.headers.setdefault("X-Frame-Options", "DENY")
+    if not is_chat:
+        response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault(
         "Content-Security-Policy",
@@ -579,7 +592,7 @@ async def security_headers_middleware(request: Request, call_next):
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https:; "
             "connect-src 'self'; "
-            "frame-ancestors 'none';"
+            f"frame-ancestors {'self' if is_chat else 'none'};"
         ),
     )
     return response

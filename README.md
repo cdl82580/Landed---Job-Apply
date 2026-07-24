@@ -90,6 +90,14 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - Seed endpoint (`POST /api/admin/kb/seed-from-file`) re-extracts the built-in article set from `frontend/kb.html` via Node.js
 - Stored as a single JSON blob in Tigris (`kb/data.json`); seed data auto-applied if no blob exists yet
 
+### Support Chatbot
+- Floating chat widget (Chainlit Copilot) on every authenticated app page — `agents.html`, `tracking.html`, `admin.html`, `profile.html`, `calendar.html`, `api-docs.html`, and `kb.html` (gated behind a login check there, since that page is public)
+- Mounted in-process at `/chat` via `chainlit.utils.mount_chainlit` — same FastAPI process/machine as the rest of the web app, no separate Fly process group
+- Auth bridges the existing `session` cookie: `chainlit_app.py`'s `header_auth_callback` re-verifies it with the same HMAC secret as `api.py` (`scripts/session.py`) and carries the user's role into the chat session
+- Answers are grounded in the Knowledge Base only — visible articles are filtered by the same `adminOnly` rule as `kb.html` (admin-only KB content never reaches a non-admin chat session), then stuffed into the system prompt fresh at chat start (no vector store)
+- Branded with the app's logo (`public/logo_light.png`/`logo_dark.png`, `public/favicon.png`) and brand colors (`public/theme.json`)
+- Requires `CHAINLIT_AUTH_SECRET` (Chainlit's own JWT signing secret — see Deployment) in addition to the existing `ANTHROPIC_API_KEY`
+
 ### Slack Bot
 See [Slack Commands](#slack-commands) section below.
 
@@ -132,6 +140,10 @@ for a plain-language walkthrough, or the per-command sections below ([Slack Comm
 job-apply/
 ├── api.py                     ← FastAPI backend (auth, runs, SSE, Drive proxy)
 ├── apply.py                   ← Core workflow engine + CLI entry point
+├── chainlit_app.py            ← KB support chatbot (mounted at /chat via mount_chainlit)
+├── chainlit.md                ← Support chatbot welcome text
+├── .chainlit/config.toml      ← Chainlit app config
+├── public/                    ← Chainlit branding (theme.json, logo_light/dark.png, favicon.png)
 ├── slack_bot.py               ← Slack bot (all slash commands)
 ├── slack_manifest.yml         ← Slack app manifest (copy into app config)
 ├── slack_manifest.json        ← Same manifest in JSON format
@@ -361,6 +373,7 @@ pip install -r requirements.txt && npm install
 
 export ANTHROPIC_API_KEY=sk-ant-...
 export SESSION_SECRET=any-random-string
+export CHAINLIT_AUTH_SECRET=...  # generate with: python -m chainlit create-secret
 
 # Tigris S3 (user accounts, resumes, profiles, tracker data)
 export AWS_ACCESS_KEY_ID=...
@@ -421,6 +434,7 @@ Both process groups share the same Docker image and all Fly secrets.
 |--------|-------------|
 | `ANTHROPIC_API_KEY` | Claude API key |
 | `SESSION_SECRET` | HMAC signing key for session tokens (also used to derive webhook secret encryption key) |
+| `CHAINLIT_AUTH_SECRET` | JWT signing secret for the mounted Chainlit support chatbot — generate with `chainlit create-secret` |
 | `AWS_ACCESS_KEY_ID` | Tigris key |
 | `AWS_SECRET_ACCESS_KEY` | Tigris secret |
 | `AWS_ENDPOINT_URL_S3` | `https://fly.storage.tigris.dev` |

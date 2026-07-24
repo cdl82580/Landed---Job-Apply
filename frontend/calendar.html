@@ -1237,5 +1237,27 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
     document.addEventListener('click', function() { menu.classList.remove('open'); });
   })();
   </script>
+  <!-- KB support chatbot widget -->
+  <script src="/chat/copilot/index.js"></script>
+  <script>
+  (function () {
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then(function (res) { return res.ok; })
+      .catch(function () { return false; })
+      .then(function (loggedIn) {
+        if (!loggedIn) return;
+        return fetch('/chat/auth/header', { method: 'POST', credentials: 'same-origin' });
+      })
+      .then(function (res) {
+        if (!res || !res.ok) return;
+        var theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        window.mountChainlitWidget({
+          chainlitServer: window.location.origin + '/chat',
+          theme: theme,
+          button: { imageUrl: '/img/logo.png' },
+        });
+      });
+  })();
+  </script>
 </body>
 </html>
