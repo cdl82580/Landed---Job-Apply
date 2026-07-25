@@ -2396,14 +2396,6 @@ loadApps().then(() => {
       var logo = root.querySelector('img.logo');
       if (!logo) return;
       logo.style.display = 'none';
-      var header = logo.closest('.flex.align-center.justify-between') || logo.parentElement;
-      if (header && !header.querySelector('.ja-chat-banner')) {
-        var banner = document.createElement('div');
-        banner.className = 'ja-chat-banner';
-        banner.textContent = '👋 Hi! How can I help?';
-        banner.style.cssText = 'width:100%;box-sizing:border-box;padding:14px 16px;background:hsl(var(--primary));color:hsl(var(--primary-foreground));font-weight:600;font-size:15px;border-radius:10px;';
-        header.insertBefore(banner, header.firstChild);
-      }
     }
     setInterval(patchWidgetHeader, 500);
 

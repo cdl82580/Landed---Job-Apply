@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 import time
 from http.cookies import SimpleCookie
+from pathlib import Path
 from typing import Dict, Optional
 
 import anthropic
@@ -30,12 +31,12 @@ DEFAULT_MODEL = "claude-sonnet-5"
 _SESSION_COOKIE_NAME = "session"
 
 _SYSTEM_PROMPT_HEADER = """You are the support assistant for Job Apply, embedded as a chat widget \
-in the web app. Answer only using the Knowledge Base articles provided below — \
-if the answer isn't covered by them, say you're not sure and point the user to \
+in the web app. Answer only using the reference material provided below — \
+if the answer isn't covered by it, say you're not sure and point the user to \
 the Knowledge Base at /kb.html rather than guessing. Keep answers short and direct.
-
-# Knowledge Base
 """
+
+_README_PATH = Path(__file__).resolve().parent / "README.md"
 
 # ---------------------------------------------------------------------------
 # Anthropic client — lazy init, same pattern as apply.py
@@ -141,6 +142,16 @@ def _visible_kb_text(role: str) -> str:
     return "\n\n".join(chunks) if chunks else "(No knowledge base articles are available.)"
 
 
+def _admin_project_docs() -> str:
+    """README.md — architecture, deployment, and the Slack/Teams command
+    reference all live there. Admin-only: it covers internals (webhooks,
+    storage layout, secrets) that aren't appropriate for regular users."""
+    try:
+        return _README_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
 # ---------------------------------------------------------------------------
 # Chat lifecycle
 # ---------------------------------------------------------------------------
@@ -153,12 +164,20 @@ async def on_chat_start():
     user = cl.user_session.get("user")
     role = (user.metadata or {}).get("role", "user") if user else "user"
 
-    system_prompt = _SYSTEM_PROMPT_HEADER + _visible_kb_text(role)
+    sections = [_SYSTEM_PROMPT_HEADER, "\n# Knowledge Base\n" + _visible_kb_text(role)]
+    if role == "admin":
+        docs = _admin_project_docs()
+        if docs:
+            sections.append(
+                "\n\n# Project Documentation (README.md — architecture, deployment, "
+                "Slack/Teams command reference)\n" + docs
+            )
+    system_prompt = "".join(sections)
     cl.user_session.set("system_prompt", system_prompt)
     cl.user_session.set("history", [])
 
     await cl.Message(
-        content="Hi! I can help with questions about using Job Apply — ask me anything covered in the Knowledge Base."
+        content="Hi! I can help with questions about using Job Apply."
     ).send()
 
 

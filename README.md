@@ -95,7 +95,8 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - Mounted in-process at `/chat` via `chainlit.utils.mount_chainlit` — same FastAPI process/machine as the rest of the web app, no separate Fly process group
 - Auth bridges the existing `session` cookie: `chainlit_app.py`'s `header_auth_callback` re-verifies it with the same HMAC secret as `api.py` (`scripts/session.py`) and carries the user's role into the chat session
 - Answers are grounded in the Knowledge Base only — visible articles are filtered by the same `adminOnly` rule as `kb.html` (admin-only KB content never reaches a non-admin chat session), then stuffed into the system prompt fresh at chat start (no vector store)
-- Branded with the app's logo (`public/logo_light.png`/`logo_dark.png`, `public/favicon.png`) and brand colors (`public/theme.json`)
+- Admin sessions additionally get the full `README.md` (architecture, deployment, Slack/Teams command reference) as reference material — regular users never see it
+- Branded with the app's brand colors (`public/theme.json`); the default Chainlit header logo is hidden since it didn't fit the widget's compact size
 - Requires `CHAINLIT_AUTH_SECRET` (Chainlit's own JWT signing secret — see Deployment) in addition to the existing `ANTHROPIC_API_KEY`
 
 ### Slack Bot
