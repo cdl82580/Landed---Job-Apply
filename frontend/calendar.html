@@ -1241,6 +1241,33 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
   <script src="/chat/copilot/index.js"></script>
   <script>
   (function () {
+    var _origFetch = window.fetch;
+    window.fetch = function (input, init) {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      if (url.indexOf('/public/theme.json') !== -1) {
+        init = Object.assign({}, init, { cache: 'no-store' });
+      }
+      return _origFetch.call(this, input, init);
+    };
+
+    function patchWidgetHeader() {
+      var host = document.getElementById('chainlit-copilot');
+      if (!host || !host.shadowRoot) return;
+      var root = host.shadowRoot;
+      var logo = root.querySelector('img.logo');
+      if (!logo) return;
+      logo.style.display = 'none';
+      var header = logo.closest('.flex.align-center.justify-between') || logo.parentElement;
+      if (header && !header.querySelector('.ja-chat-banner')) {
+        var banner = document.createElement('div');
+        banner.className = 'ja-chat-banner';
+        banner.textContent = '👋 Hi! How can I help?';
+        banner.style.cssText = 'width:100%;box-sizing:border-box;padding:14px 16px;background:hsl(var(--primary));color:hsl(var(--primary-foreground));font-weight:600;font-size:15px;border-radius:10px;';
+        header.insertBefore(banner, header.firstChild);
+      }
+    }
+    setInterval(patchWidgetHeader, 500);
+
     fetch('/api/auth/me', { credentials: 'same-origin' })
       .then(function (res) { return res.ok; })
       .catch(function () { return false; })
