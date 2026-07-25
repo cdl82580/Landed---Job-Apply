@@ -451,6 +451,7 @@
   <div class="card">
     <p class="card-title">Master Resume</p>
     <div class="file-info" id="resumeStatus"></div>
+    <div class="file-info hidden" id="previousResumeStatus" style="margin-bottom:1rem"></div>
     <form id="resumeForm" enctype="multipart/form-data">
       <div class="field">
         <label>Upload New Resume (.docx)</label>
@@ -731,8 +732,41 @@
     document.getElementById('resumeStatus').innerHTML = d.has_resume
       ? `<span class="dot"></span>Resume on file<span style="color:var(--muted);font-weight:400">${fname}</span>${uploadedLabel}`
       : '<span style="color:var(--error)">⚠ No resume uploaded yet</span>';
+
+    const prevEl = document.getElementById('previousResumeStatus');
+    if (d.has_previous_resume) {
+      const when = d.resume_previous_saved_at
+        ? new Date(d.resume_previous_saved_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+        : '';
+      prevEl.innerHTML = `
+        <span>Previous version available${when ? ` — replaced ${when}` : ''}</span>
+        <div style="display:flex;gap:.5rem;margin-top:.5rem">
+          <a class="btn btn-ghost" style="padding:.35rem .75rem;font-size:.8rem" href="/api/profile/resume/previous" download>Download</a>
+          <button type="button" class="btn btn-ghost" style="padding:.35rem .75rem;font-size:.8rem" id="restorePrevResumeBtn">Restore this version</button>
+        </div>`;
+      prevEl.classList.remove('hidden');
+      document.getElementById('restorePrevResumeBtn').addEventListener('click', restorePreviousResume);
+    } else {
+      prevEl.classList.add('hidden');
+      prevEl.innerHTML = '';
+    }
   }
   loadProfile();
+
+  async function restorePreviousResume() {
+    const btn = document.getElementById('restorePrevResumeBtn');
+    btn.disabled = true;
+    btn.textContent = 'Restoring…';
+    const res  = await apiFetch('/api/profile/resume/restore', { method: 'POST' });
+    const body = await res.json();
+    if (res.ok) {
+      await loadProfile();  // rebuilds the button fresh, re-enabled
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Restore this version';
+    }
+    toast('resumeToast', res.ok ? '✓ Previous version restored.' : (body.detail ?? 'Error'), res.ok ? 'ok' : 'err');
+  }
 
   document.getElementById('resendBtn').addEventListener('click', async function() {
     this.disabled = true; this.textContent = 'Sending…';

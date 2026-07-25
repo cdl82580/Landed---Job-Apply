@@ -109,12 +109,14 @@ from scripts import calendar as cal_store
 from scripts import applications as app_store
 from scripts import notification_state as notif_state
 from scripts import agent_runs
+from scripts import resume_builder
 from scripts.notification_tokens import create_token as _create_notif_token
 from scripts.session import SESSION_DAYS as _SESSION_DAYS_SHARED
 from scripts.session import create_session_token, verify_session_token, verify_bot_key
 from scripts.session import resolve_session_secret
 from routers.applications import router as applications_router
 from routers.companies import router as companies_router
+from routers.lookups import router as lookups_router
 from routers.auth_google import router as auth_google_router
 from routers.admin import router as admin_router
 from routers.calendar import router as calendar_router
@@ -544,6 +546,7 @@ def _send_verification_email(to: str, display_name: str, token: str) -> bool:
 app = FastAPI(title="Job Application Agent")
 app.include_router(applications_router)
 app.include_router(companies_router)
+app.include_router(lookups_router)
 app.include_router(auth_google_router)
 app.include_router(admin_router)
 app.include_router(calendar_router)
@@ -1563,11 +1566,12 @@ def _invalidate_user_cache(user_id: str) -> None:
 # In-memory stores
 # ---------------------------------------------------------------------------
 
-_runs:           dict[str, dict[str, Any]] = {}
-_preps:          dict[str, dict[str, Any]] = {}
-_optimizations:  dict[str, dict[str, Any]] = {}
-_app_questions:  dict[str, dict[str, Any]] = {}
-_thank_yous:     dict[str, dict[str, Any]] = {}
+_runs:            dict[str, dict[str, Any]] = {}
+_preps:           dict[str, dict[str, Any]] = {}
+_optimizations:   dict[str, dict[str, Any]] = {}
+_app_questions:   dict[str, dict[str, Any]] = {}
+_thank_yous:      dict[str, dict[str, Any]] = {}
+_resume_builders: dict[str, dict[str, Any]] = {}
 _MAX_ACTIVE_RUNS_PER_USER = 5  # cap in-flight + queued entries per user
 
 # Per-user locks so concurrent runs from different users don't block each other.
@@ -1659,7 +1663,7 @@ def _worker_thread(
 def _evict_stale() -> None:
     """Remove completed/errored runs and preps older than _RUN_TTL."""
     cutoff = time.time() - _RUN_TTL
-    for store in (_runs, _preps, _optimizations, _app_questions, _thank_yous):
+    for store in (_runs, _preps, _optimizations, _app_questions, _thank_yous, _resume_builders):
         stale = [
             k for k, v in store.items()
             if v.get("status") in ("done", "error")
@@ -1769,6 +1773,49 @@ class OptimizeRequest(BaseModel):
     role: str
     optimize_resume: bool = True
     optimize_cover_letter: bool = True
+    model: str | None = None
+
+class ResumeBuilderJob(BaseModel):
+    company: str
+    title: str
+    location: str = ""
+    start: str = ""
+    end: str = ""
+    current: bool = False
+    bullets: list[str] = []
+
+class ResumeBuilderEducation(BaseModel):
+    degree: str
+    institution: str
+    location: str = ""
+    graduated: str = ""
+
+class ResumeBuilderCert(BaseModel):
+    name: str
+    issuer: str = ""
+    year: str = ""
+
+_MAX_RESUME_BUILDER_JOBS = 15
+_MAX_RESUME_BUILDER_BULLETS_PER_JOB = 15
+_MAX_RESUME_BUILDER_EDUCATION = 10
+_MAX_RESUME_BUILDER_CERTS = 20
+_MAX_RESUME_BUILDER_SKILLS = 60
+
+class ResumeBuilderRequest(BaseModel):
+    template: str                # "technical" | "traditional" | "executive"
+    full_name: str
+    email: str
+    phone: str = ""
+    location: str = ""
+    linkedin: str = ""
+    website: str = ""
+    summary: str = ""
+    skills: list[str] = []
+    jobs: list[ResumeBuilderJob] = []
+    education: list[ResumeBuilderEducation] = []
+    certs: list[ResumeBuilderCert] = []
+    polish: bool = True
+    confirm_overwrite: bool = False
     model: str | None = None
 
 # ---------------------------------------------------------------------------
@@ -2137,6 +2184,8 @@ async def get_profile(request: Request):
         "has_resume":           storage.has_resume(user_data["user_id"]),
         "resume_filename":      record.get("resume_filename"),
         "resume_uploaded_at":   record.get("resume_uploaded_at"),
+        "has_previous_resume":       storage.has_previous_resume(user_data["user_id"]),
+        "resume_previous_saved_at":  record.get("resume_previous_saved_at"),
         "notification_prefs":   prefs,
     }
 
@@ -2194,14 +2243,49 @@ async def upload_resume(request: Request, resume: UploadFile = File(...)):
         raise HTTPException(400, "Resume file must be under 10 MB.")
     if not data[:4] == b"PK\x03\x04":
         raise HTTPException(400, "File is not a valid .docx (must be a ZIP archive). If this is a .doc file, please convert it to .docx first.")
+    backed_up = storage.save_resume(user_data["user_id"], data)
     record = storage.get_user_by_id(user_data["user_id"])
     if record:
         record["resume_filename"] = resume.filename
         record["resume_uploaded_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        if backed_up:
+            record["resume_previous_saved_at"] = record["resume_uploaded_at"]
         storage.save_user(record)
-    storage.save_resume(user_data["user_id"], data)
     user_audit.log(user_data["user_id"], "resume_uploaded", user_data["email"],
                    _client_ip(request), filename=resume.filename, size_bytes=len(data))
+    return {"ok": True}
+
+
+@app.get("/api/profile/resume/previous")
+async def download_previous_resume(request: Request):
+    user_data = _require_user(request)
+    data = storage.get_previous_resume(user_data["user_id"])
+    if not data:
+        raise HTTPException(404, "No previous resume on file.")
+    user_audit.log(user_data["user_id"], "file_downloaded", user_data["email"],
+                   _client_ip(request), filename="master_previous.docx", run_type="profile")
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": 'attachment; filename="master_previous.docx"'},
+    )
+
+
+@app.post("/api/profile/resume/restore")
+async def restore_previous_resume(request: Request):
+    _check_rate_limit(request, "restore_resume", max_hits=10, window_secs=3600)
+    user_data = _require_user(request)
+    if not storage.restore_previous_resume(user_data["user_id"]):
+        raise HTTPException(404, "No previous resume to restore.")
+
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    record = storage.get_user_by_id(user_data["user_id"])
+    if record:
+        record["resume_uploaded_at"]        = now
+        record["resume_previous_saved_at"]  = now
+        storage.save_user(record)
+
+    user_audit.log(user_data["user_id"], "resume_restored", user_data["email"], _client_ip(request))
     return {"ok": True}
 
 
@@ -3346,6 +3430,212 @@ async def get_optimize_file(optimize_id: str, filename: str, request: Request):
     user_audit.log(user_data["user_id"], "file_downloaded", user_data["email"],
                    _client_ip(request), optimize_id=optimize_id, filename=filename,
                    run_type="optimize")
+
+    return FileResponse(
+        file_path,
+        filename=filename,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Master Resume Builder — guided Q&A wizard for users with no resume on file
+# ---------------------------------------------------------------------------
+
+def _resume_builder_worker(
+    store:      dict,
+    entry_id:   str,
+    user_id:    str,
+    user_email: str,
+    req:        ResumeBuilderRequest,
+) -> None:
+    """Dedicated worker for the resume-builder agent.
+
+    Unlike _worker_thread, there's no existing master resume to load into a
+    temp file first — this agent produces the master resume, so it writes
+    its own run_dir under output/{user_id}/ (required for the Node `docx`
+    generator's require('docx') to resolve node_modules — see
+    scripts/resume_builder.py:render_resume) and saves the result as the
+    user's live resume via storage.save_resume on success.
+    """
+    q = store[entry_id]["queue"]
+
+    def progress(msg: str):
+        q.put({"type": "progress", "message": msg})
+
+    with _get_user_lock(user_id):
+        store[entry_id]["status"] = "running"
+        agent_runs.update(user_id, entry_id, status="running")
+        try:
+            data = req.model_dump(exclude={"template", "polish", "confirm_overwrite", "model"})
+
+            if req.polish:
+                progress("Polishing your bullets and summary with AI…")
+                data = resume_builder.polish_resume_data(
+                    data, req.model or _get_active_model(), progress)
+
+            progress(f"Building your {req.template} resume…")
+            run_dir   = OUTPUT_DIR / safe_filename(user_id) / f"resume_builder_{entry_id}"
+            docx_path = run_dir / "master.docx"
+            resume_builder.render_resume(data, req.template, docx_path, progress=progress)
+
+            docx_bytes = docx_path.read_bytes()
+            backed_up = storage.save_resume(user_id, docx_bytes)
+
+            record = storage.get_user_by_id(user_id)
+            if record:
+                record["resume_filename"]    = "master.docx"
+                record["resume_uploaded_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                if backed_up:
+                    record["resume_previous_saved_at"] = record["resume_uploaded_at"]
+                storage.save_user(record)
+
+            store[entry_id]["result"]       = {"run_dir": run_dir, "filename": "master.docx"}
+            store[entry_id]["status"]       = "done"
+            store[entry_id]["_finished_at"] = time.time()
+            user_audit.log(user_id, "resume_builder_completed", user_email,
+                           template=req.template, job_count=len(req.jobs))
+            agent_runs.complete(user_id, entry_id, output_files=["master.docx"])
+            q.put({"type": "done", "resume_builder_id": entry_id,
+                   "files": {"resume": "master.docx"}})
+        except WorkflowError as exc:
+            store[entry_id]["status"]       = "error"
+            store[entry_id]["error"]        = str(exc)
+            store[entry_id]["_finished_at"] = time.time()
+            user_audit.log(user_id, "resume_builder_failed", user_email, error=str(exc))
+            agent_runs.fail(user_id, entry_id, str(exc))
+            q.put({"type": "error", "message": str(exc)})
+        except Exception as exc:
+            msg = f"Unexpected error: {type(exc).__name__}: {exc}"
+            logger.exception("Unexpected error in resume_builder %s", entry_id)
+            store[entry_id]["status"]       = "error"
+            store[entry_id]["error"]        = msg
+            store[entry_id]["_finished_at"] = time.time()
+            user_audit.log(user_id, "resume_builder_failed", user_email, error=msg)
+            agent_runs.fail(user_id, entry_id, msg)
+            q.put({"type": "error", "message": "An unexpected error occurred. Please try again."})
+        finally:
+            q.put(None)
+
+
+@app.post("/api/resume-builder")
+async def create_resume_builder(req: ResumeBuilderRequest, request: Request, response: Response):
+    user_data = _require_user(request)
+    if user_data.get("role") == "admin":
+        raise HTTPException(403, "Admin accounts cannot create runs")
+    user_id = user_data["user_id"]
+
+    if req.template not in resume_builder.TEMPLATES:
+        raise HTTPException(400, f"Unknown template. Choose one of: {', '.join(resume_builder.TEMPLATES)}")
+    if not req.full_name.strip() or not req.email.strip():
+        raise HTTPException(400, "Full name and email are required.")
+    has_job_content = any(j.company.strip() and j.title.strip() and any(b.strip() for b in j.bullets) for j in req.jobs)
+    has_education   = any(e.degree.strip() and e.institution.strip() for e in req.education)
+    if not has_job_content and not has_education:
+        raise HTTPException(400, "Add at least one job (with a bullet) or one education entry.")
+    if len(req.jobs) > _MAX_RESUME_BUILDER_JOBS:
+        raise HTTPException(400, f"Too many jobs (max {_MAX_RESUME_BUILDER_JOBS}).")
+    if any(len(j.bullets) > _MAX_RESUME_BUILDER_BULLETS_PER_JOB for j in req.jobs):
+        raise HTTPException(400, f"Too many bullets on one job (max {_MAX_RESUME_BUILDER_BULLETS_PER_JOB}).")
+    if len(req.education) > _MAX_RESUME_BUILDER_EDUCATION:
+        raise HTTPException(400, f"Too many education entries (max {_MAX_RESUME_BUILDER_EDUCATION}).")
+    if len(req.certs) > _MAX_RESUME_BUILDER_CERTS:
+        raise HTTPException(400, f"Too many certifications (max {_MAX_RESUME_BUILDER_CERTS}).")
+    if len(req.skills) > _MAX_RESUME_BUILDER_SKILLS:
+        raise HTTPException(400, f"Too many skills (max {_MAX_RESUME_BUILDER_SKILLS}).")
+
+    if storage.has_resume(user_id) and not req.confirm_overwrite:
+        raise HTTPException(409, "You already have a master resume on file. Confirm to replace it.")
+
+    _evict_stale()
+
+    active_count = sum(1 for r in _resume_builders.values()
+                       if r.get("user_id") == user_id and r.get("status") not in ("done", "error"))
+    if active_count >= _MAX_ACTIVE_RUNS_PER_USER:
+        raise HTTPException(429, "Too many active runs. Wait for an existing run to finish.")
+
+    entry_id = str(uuid.uuid4())
+    q: Queue[dict | None] = Queue()
+    _resume_builders[entry_id] = {"queue": q, "status": "queued", "result": None, "error": None,
+                                  "user_id": user_id}
+    user_audit.log(user_id, "resume_builder_started", user_data["email"], _client_ip(request),
+                   run_id=entry_id, template=req.template)
+    agent_runs.create(run_id=entry_id, run_type="resume_builder", user_id=user_id,
+                      user_email=user_data["email"], initiated_by=user_data["email"])
+
+    if FLY_MACHINE_ID:
+        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True)
+
+    threading.Thread(
+        target=_resume_builder_worker,
+        args=(_resume_builders, entry_id, user_id, user_data["email"], req),
+        daemon=True,
+    ).start()
+    return {"run_id": entry_id, "machine_id": FLY_MACHINE_ID or None}
+
+
+@app.get("/api/resume-builder/{entry_id}/stream")
+async def stream_resume_builder(entry_id: str, request: Request):
+    user_data = _require_user(request)
+    if entry_id not in _resume_builders:
+        raise HTTPException(404, "Run not found")
+    if _resume_builders[entry_id].get("user_id") != user_data["user_id"] and user_data.get("role") != "admin":
+        raise HTTPException(403, "Access denied")
+
+    q    = _resume_builders[entry_id]["queue"]
+    loop = asyncio.get_running_loop()
+
+    async def generate():
+        while True:
+            try:
+                msg = await loop.run_in_executor(None, lambda: q.get(timeout=30))
+            except Empty:
+                yield ": keepalive\n\n"
+                continue
+            if msg is None:
+                break
+            yield f"data: {json.dumps(msg)}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/resume-builder/{entry_id}/status")
+async def resume_builder_status(entry_id: str, request: Request):
+    user_data = _require_user(request)
+    entry = _resume_builders.get(entry_id)
+    if not entry:
+        raise HTTPException(404, "Run not found")
+    if entry.get("user_id") != user_data["user_id"] and user_data.get("role") != "admin":
+        raise HTTPException(403, "Access denied")
+    return {"run_id": entry_id, "status": entry["status"], "error": entry.get("error")}
+
+
+@app.get("/api/resume-builder/{entry_id}/files/{filename}")
+async def get_resume_builder_file(entry_id: str, filename: str, request: Request):
+    user_data = _require_user(request)
+    entry = _resume_builders.get(entry_id)
+    if not entry or entry["status"] != "done" or not entry.get("result"):
+        raise HTTPException(404, "Run not complete")
+    if entry.get("user_id") != user_data["user_id"] and user_data.get("role") != "admin":
+        raise HTTPException(403, "Access denied")
+
+    result    = entry["result"]
+    run_dir   = result["run_dir"]
+    file_path = (run_dir / filename).resolve()
+    try:
+        file_path.relative_to(run_dir.resolve())
+    except ValueError:
+        raise HTTPException(400, "Invalid filename")
+
+    if not file_path.exists():
+        raise HTTPException(404, "File not found")
+
+    user_audit.log(user_data["user_id"], "file_downloaded", user_data["email"],
+                   _client_ip(request), run_id=entry_id, filename=filename, run_type="resume_builder")
 
     return FileResponse(
         file_path,

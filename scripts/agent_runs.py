@@ -37,6 +37,7 @@ _ALL_PREFIX = "agent-runs/users/"
 
 VALID_TYPES = frozenset({
     "resume", "interview_prep", "aq", "optimize", "thank_you", "scoring",
+    "resume_builder",
 })
 
 VALID_STATUSES = frozenset({

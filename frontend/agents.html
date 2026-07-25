@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Agents - Job Apply</title>
   <link rel="icon" href="/favicon.png" type="image/png">
+  <script src="/libphonenumber-min.js"></script>
   <!-- Anti-FOUC: apply saved theme before CSS renders -->
   <script>
     (function(){
@@ -205,7 +206,9 @@
     label { display: block; font-weight: 600; font-size: .875rem; margin-bottom: .375rem; }
     label .opt { font-weight: 400; color: var(--muted); font-size: .8rem; }
 
-    input[type="text"], textarea {
+    input[type="text"], input[type="email"], input[type="url"],
+    input[type="tel"], input[type="month"], input[type="date"],
+    input[type="time"], textarea {
       width: 100%;
       padding: .5rem .75rem;
       border: 1px solid var(--input-border);
@@ -216,12 +219,53 @@
       background: var(--input-bg);
       transition: border-color .15s, background .2s, color .2s;
     }
-    input[type="text"]:focus, textarea:focus {
+    input[type="text"]:focus, input[type="email"]:focus, input[type="url"]:focus,
+    input[type="tel"]:focus, input[type="month"]:focus, input[type="date"]:focus,
+    input[type="time"]:focus, textarea:focus {
       outline: none;
       border-color: var(--border);
       box-shadow: 0 0 0 3px rgba(99,102,241,.15);
     }
+    input:disabled { opacity: .55; cursor: not-allowed; }
     textarea { resize: vertical; min-height: 180px; line-height: 1.5; }
+
+    /* ── Resume Builder search comboboxes (location / institution) ─── */
+    .rb-search-wrap { position: relative; }
+    .rb-suggestions {
+      position: absolute; left: 0; right: 0; top: calc(100% + 4px);
+      background: var(--bg-card); border: 1px solid var(--card-border);
+      border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15);
+      max-height: 260px; overflow-y: auto; z-index: 200;
+    }
+    .rb-sugg-item {
+      display: flex; align-items: center; gap: .625rem;
+      padding: .5rem .75rem; cursor: pointer;
+    }
+    .rb-sugg-item:hover { background: var(--fill); }
+    .rb-sugg-logo {
+      width: 24px; height: 24px; border-radius: 4px; object-fit: contain;
+      flex-shrink: 0; background: var(--fill);
+    }
+    .rb-sugg-logo-ph {
+      width: 24px; height: 24px; border-radius: 4px; flex-shrink: 0;
+      background: var(--fill); color: var(--muted);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .65rem; font-weight: 700;
+    }
+    .rb-sugg-body { min-width: 0; flex: 1; }
+    .rb-sugg-name { font-weight: 600; font-size: .85rem; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rb-sugg-meta { font-size: .75rem; color: var(--muted);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rb-sugg-loading, .rb-sugg-empty {
+      padding: .625rem .75rem; font-size: .8rem; color: var(--muted);
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .spin-sm {
+      display: inline-block; width: 11px; height: 11px;
+      border: 2px solid var(--card-border); border-top-color: var(--muted);
+      border-radius: 50%; animation: rot .7s linear infinite; vertical-align: middle;
+    }
 
 
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem; }
@@ -399,6 +443,28 @@
       transition: background-color .2s, border-color .15s, color .2s;
     }
     select:focus { outline: none; border-color: var(--border); box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+
+    /* ── Repeatable rows (resume builder: jobs/bullets/education/certs) ─ */
+    .repeat-block {
+      position: relative;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 1rem; padding-right: 2.5rem;
+      margin-bottom: .75rem;
+      background: var(--fill);
+    }
+    /* Direct child only — a bullet-row's own remove button nests inside a
+       job .repeat-block too, and must NOT inherit this absolute positioning
+       (it would overlap the job block's own remove button in the corner). */
+    .repeat-block > .repeat-remove-btn { position: absolute; top: .5rem; right: .5rem; }
+    .repeat-remove-btn {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: .85rem; line-height: 1; padding: .35rem; flex-shrink: 0;
+    }
+    .repeat-remove-btn:hover { color: var(--error); }
+    .rb-current-row { display: flex; align-items: center; gap: .4rem; font-weight: 400;
+      font-size: .825rem; margin-top: .5rem; color: var(--text); }
+    .rb-current-row input { width: auto; }
 
     /* ── Prep card collapsible ───────────────────────────────────── */
     .card-head {
@@ -656,6 +722,129 @@
       Check your inbox for a verification link — or
     </div>
     <button class="verify-resend-btn" id="resendVerifyBtn">Resend verification email</button>
+  </div>
+
+  <!-- ── Master Resume Builder ──────────────────────────────────── -->
+  <div class="card" id="rbCard">
+    <div class="card-head" id="rbToggle">
+      <h2>Build Master Resume</h2>
+      <span class="chevron" id="rbChevron">&#9660;</span>
+    </div>
+    <div class="card-body hidden" id="rbBody">
+      <p style="font-size:.85rem;color:var(--muted);margin:0 0 1.25rem">
+        No master resume yet? Answer a few questions about your work history and
+        we'll build one for you — every agent below needs a master resume on
+        file before it can run.
+      </p>
+      <form id="rbForm">
+
+        <div class="field">
+          <label for="rbTemplate">Resume Style</label>
+          <select id="rbTemplate" name="template" required>
+            <option value="technical" title="Single column, minimal styling. Best for integration, platform, and AI/agent engineering roles.">Technical / ATS-Clean</option>
+            <option value="traditional" title="Classic business format. Best for professional services, TAM, and customer success roles.">Traditional / Chronological</option>
+            <option value="executive" title="Polished header with a competency grid. Best for senior, staff, and leadership roles.">Executive / Leadership</option>
+          </select>
+          <div id="rbTemplateDesc" style="margin-top:.375rem;font-size:.8rem;color:var(--muted)"></div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="rbFullName">Full Name</label>
+            <input id="rbFullName" name="full_name" type="text" required>
+          </div>
+          <div class="field">
+            <label for="rbEmail">Email</label>
+            <input id="rbEmail" name="email" type="email" placeholder="jane@example.com" required>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="rbPhone">Phone <span class="opt">(optional)</span></label>
+            <input id="rbPhone" name="phone" type="tel" placeholder="e.g. (978) 790-4272" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="rbLocation">Location <span class="opt">(optional)</span></label>
+            <div class="rb-search-wrap">
+              <input id="rbLocation" name="location" type="text" placeholder="City, State" autocomplete="off">
+              <div class="rb-suggestions hidden" id="rbLocationSuggestions"></div>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="rbLinkedin">LinkedIn <span class="opt">(optional)</span></label>
+            <input id="rbLinkedin" name="linkedin" type="url" placeholder="https://linkedin.com/in/janedoe">
+          </div>
+          <div class="field">
+            <label for="rbWebsite">Website / Portfolio <span class="opt">(optional)</span></label>
+            <input id="rbWebsite" name="website" type="url" placeholder="https://janedoe.dev">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="rbSummary">Professional Summary <span class="opt">(optional — AI drafts one from your work history if left blank and polish is on)</span></label>
+          <textarea id="rbSummary" name="summary" rows="3" style="min-height:80px"></textarea>
+        </div>
+
+        <div class="field">
+          <label>Work Experience</label>
+          <div id="rbJobs"></div>
+          <button type="button" class="btn btn-ghost" id="rbAddJob" style="margin-top:.25rem">+ Add a job</button>
+        </div>
+
+        <div class="field">
+          <label>Education</label>
+          <div id="rbEducation"></div>
+          <button type="button" class="btn btn-ghost" id="rbAddEducation" style="margin-top:.25rem">+ Add education</button>
+        </div>
+
+        <div class="field">
+          <label>Certifications <span class="opt">(optional)</span></label>
+          <div id="rbCerts"></div>
+          <button type="button" class="btn btn-ghost" id="rbAddCert" style="margin-top:.25rem">+ Add a certification</button>
+        </div>
+
+        <div class="field">
+          <label for="rbSkills">Skills <span class="opt">(one per line)</span></label>
+          <textarea id="rbSkills" rows="4" style="min-height:100px" placeholder="Python&#10;Salesforce&#10;REST APIs"></textarea>
+        </div>
+
+        <div class="field" style="display:flex;align-items:center;gap:.5rem">
+          <input type="checkbox" id="rbPolish" checked style="width:auto">
+          <label for="rbPolish" style="margin:0;font-weight:500">Polish my wording with AI <span class="opt">(tightens phrasing — never invents facts or numbers)</span></label>
+        </div>
+
+        <div style="display:flex;gap:.75rem;align-items:center;margin-top:.25rem">
+          <button class="btn" type="submit" id="rbSubmitBtn">Build My Resume</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Resume Builder Progress ────────────────────────────────── -->
+  <div class="card hidden" id="rbProgressCard">
+    <div class="progress-header">
+      <h2>Progress</h2>
+      <span class="badge badge-running" id="rbStatusBadge">Running</span>
+    </div>
+    <div class="log" id="rbLogEl"></div>
+    <div class="inline-err" id="rbInlineErr"></div>
+  </div>
+
+  <!-- ── Resume Builder Results ──────────────────────────────────── -->
+  <div class="card hidden" id="rbResultsCard">
+    <div class="result-meta">
+      <div class="result-check">&#10003;</div>
+      <div class="result-job">Your master resume is ready</div>
+    </div>
+    <div class="file-grid" id="rbFileGrid"></div>
+    <p style="font-size:.825rem;color:var(--muted);margin:0 0 1.25rem">
+      This is now your live master resume — every agent on this page can use
+      it. Next, add your <a href="/profile.html">Voice &amp; Profile Guide</a>
+      so the AI can write in your voice.
+    </p>
+    <button class="btn btn-ghost" id="rbNewBtn">&#x2190; Build Another</button>
   </div>
 
   <!-- ── Input form ──────────────────────────────────────────────── -->
@@ -1189,6 +1378,14 @@
         document.getElementById('modelBadge').classList.remove('hidden');
       }
       if (u.email_verified === false) document.getElementById('verifyBanner').classList.remove('hidden');
+      // Master Resume Builder: prefill email, and auto-expand for anyone who
+      // doesn't have a master resume on file yet — that's the natural next step.
+      const rbEmailEl = document.getElementById('rbEmail');
+      if (rbEmailEl && !rbEmailEl.value) rbEmailEl.value = u.email || '';
+      if (u.has_resume === false) {
+        document.getElementById('rbBody').classList.remove('hidden');
+        document.getElementById('rbChevron').classList.add('open');
+      }
     } catch (_) {}
     await loadAllApps();
     const runPicker = initRunPicker();
@@ -2753,6 +2950,426 @@
     document.getElementById('tyLog').textContent = '';
     document.getElementById('tyInterviewer').value = '';
     document.getElementById('tyTopics').value = '';
+  });
+
+  // ── Master Resume Builder ──────────────────────────────────────────
+  document.getElementById('rbToggle').addEventListener('click', () => {
+    const body = document.getElementById('rbBody');
+    const chevron = document.getElementById('rbChevron');
+    const isOpen = !body.classList.contains('hidden');
+    if (isOpen) { body.classList.add('hidden'); chevron.classList.remove('open'); }
+    else        { body.classList.remove('hidden'); chevron.classList.add('open'); }
+  });
+
+  // Full style description below the (now-shortened) select — option hover
+  // tooltips don't work on touch devices, so mirror the title text here too.
+  const rbTemplateSelect = document.getElementById('rbTemplate');
+  const rbTemplateDesc   = document.getElementById('rbTemplateDesc');
+  function updateRbTemplateDesc() {
+    const opt = rbTemplateSelect.options[rbTemplateSelect.selectedIndex];
+    rbTemplateDesc.textContent = opt ? opt.title : '';
+  }
+  rbTemplateSelect.addEventListener('change', updateRbTemplateDesc);
+  updateRbTemplateDesc();
+
+  // ── Search comboboxes (location / institution) ─────────────────────
+  // Same interaction as tracking.html's company picker: debounced search,
+  // mousedown-not-click selection (fires before the input's blur), free
+  // typing always allowed — a suggestion fills the field but never locks it
+  // (needed for values an API won't have, like "Remote" or an unlisted school).
+  function wireSearchCombobox({ inputEl, dropdownEl, endpoint, renderItemFn, onSelect }) {
+    let timer = null;
+    inputEl.addEventListener('input', () => {
+      const q = inputEl.value.trim();
+      clearTimeout(timer);
+      if (q.length < 2) { dropdownEl.classList.add('hidden'); dropdownEl.innerHTML = ''; return; }
+      dropdownEl.innerHTML = '<div class="rb-sugg-loading"><span class="spin-sm"></span> Searching…</div>';
+      dropdownEl.classList.remove('hidden');
+      timer = setTimeout(() => runSearch(q), 320);
+    });
+    inputEl.addEventListener('blur', () => {
+      setTimeout(() => dropdownEl.classList.add('hidden'), 150);
+    });
+
+    async function runSearch(q) {
+      let list;
+      try {
+        const res = await apiFetch(`${endpoint}${encodeURIComponent(q)}`);
+        list = res.ok ? await res.json() : [];
+      } catch (_) {
+        dropdownEl.innerHTML = '<div class="rb-sugg-empty">Search unavailable</div>';
+        return;
+      }
+      renderResults(list);
+    }
+
+    function renderResults(list) {
+      if (!list.length) { dropdownEl.innerHTML = '<div class="rb-sugg-empty">No matches</div>'; return; }
+      dropdownEl.innerHTML = '';
+      for (const item of list) {
+        const row = document.createElement('div');
+        row.className = 'rb-sugg-item';
+        row.innerHTML = renderItemFn(item);
+        row.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          onSelect(item, inputEl);
+          dropdownEl.classList.add('hidden');
+        });
+        dropdownEl.appendChild(row);
+      }
+    }
+  }
+
+  const rbLocationsEndpoint    = '/api/lookups/locations?q=';
+  const rbInstitutionsEndpoint = '/api/lookups/institutions?q=';
+
+  function rbLocationItemHtml(item) {
+    return `<div class="rb-sugg-body"><div class="rb-sugg-name">${esc(item.label)}</div></div>`;
+  }
+
+  function rbInstitutionItemHtml(item) {
+    const displayName = item.alias || item.name;
+    const subtitle = [item.city, item.state || item.country].filter(Boolean).join(', ');
+    const logo = item.domain
+      ? `<img class="rb-sugg-logo" src="${esc(logodevUrl(item.domain, 48))}" alt=""
+           data-company="${esc(displayName)}" data-ph-class="rb-sugg-logo-ph" onerror="logoError(this)">`
+      : `<div class="rb-sugg-logo-ph">${esc(displayName).slice(0,2).toUpperCase()}</div>`;
+    return `${logo}<div class="rb-sugg-body"><div class="rb-sugg-name">${esc(displayName)}</div><div class="rb-sugg-meta">${esc(subtitle)}</div></div>`;
+  }
+
+  wireSearchCombobox({
+    inputEl:    document.getElementById('rbLocation'),
+    dropdownEl: document.getElementById('rbLocationSuggestions'),
+    endpoint:   rbLocationsEndpoint,
+    renderItemFn: rbLocationItemHtml,
+    onSelect:   (item, inputEl) => { inputEl.value = item.label; },
+  });
+
+  // ── Phone auto-formatting (libphonenumber-js AsYouType) ─────────────
+  (function wireRbPhoneFormatting() {
+    const phoneEl = document.getElementById('rbPhone');
+    if (!phoneEl || typeof libphonenumber === 'undefined') return;
+    phoneEl.addEventListener('input', () => {
+      const digitsAndPlus = phoneEl.value;
+      const formatted = new libphonenumber.AsYouType('US').input(digitsAndPlus);
+      phoneEl.value = formatted;
+    });
+  })();
+
+  // Shared remove-row handling — one delegated listener for jobs, bullets,
+  // education rows, and cert rows (all render a .repeat-remove-btn).
+  document.getElementById('rbForm').addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('.repeat-remove-btn');
+    if (removeBtn) { removeBtn.closest('.repeat-row').remove(); return; }
+    const addBulletBtn = e.target.closest('.rb-add-bullet');
+    if (addBulletBtn) {
+      const bulletsEl = addBulletBtn.closest('.rb-job-row').querySelector('.rb-bullets');
+      bulletsEl.appendChild(rbBulletRow());
+    }
+  });
+
+  function rbJobRow() {
+    const div = document.createElement('div');
+    div.className = 'repeat-row repeat-block rb-job-row';
+    div.innerHTML = `
+      <button type="button" class="repeat-remove-btn" title="Remove this job">&#x2715;</button>
+      <div class="row">
+        <div class="field"><label>Company</label><input type="text" class="rb-job-company"></div>
+        <div class="field"><label>Title</label><input type="text" class="rb-job-title"></div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Location <span class="opt">(optional)</span></label>
+          <div class="rb-search-wrap">
+            <input type="text" class="rb-job-location" autocomplete="off">
+            <div class="rb-suggestions hidden"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Dates</label>
+          <div style="display:flex;gap:.5rem">
+            <input type="month" class="rb-job-start" style="flex:1">
+            <input type="month" class="rb-job-end" style="flex:1">
+          </div>
+          <div class="rb-current-row">
+            <input type="checkbox" class="rb-job-current"> <span>Current role</span>
+          </div>
+        </div>
+      </div>
+      <label style="font-size:.8rem">Bullet Points</label>
+      <div class="rb-bullets"></div>
+      <button type="button" class="btn btn-ghost rb-add-bullet" style="margin-top:.4rem">+ Add bullet</button>`;
+    div.querySelector('.rb-bullets').appendChild(rbBulletRow());
+
+    wireSearchCombobox({
+      inputEl:    div.querySelector('.rb-job-location'),
+      dropdownEl: div.querySelector('.rb-search-wrap .rb-suggestions'),
+      endpoint:   rbLocationsEndpoint,
+      renderItemFn: rbLocationItemHtml,
+      onSelect:   (item, inputEl) => { inputEl.value = item.label; },
+    });
+
+    const endInput = div.querySelector('.rb-job-end');
+    div.querySelector('.rb-job-current').addEventListener('change', (e) => {
+      endInput.disabled = e.target.checked;
+      if (e.target.checked) endInput.value = '';
+    });
+
+    return div;
+  }
+
+  function rbBulletRow() {
+    const div = document.createElement('div');
+    div.className = 'repeat-row rb-bullet-row';
+    div.style.cssText = 'display:flex;gap:.5rem;align-items:flex-start;margin-bottom:.5rem';
+    div.innerHTML = `
+      <textarea class="rb-bullet-text" rows="2" style="flex:1;min-height:50px" placeholder="What did you do? What was the result?"></textarea>
+      <button type="button" class="repeat-remove-btn" title="Remove this bullet">&#x2715;</button>`;
+    return div;
+  }
+
+  function rbEducationRow() {
+    const div = document.createElement('div');
+    div.className = 'repeat-row repeat-block rb-edu-row';
+    div.innerHTML = `
+      <button type="button" class="repeat-remove-btn" title="Remove">&#x2715;</button>
+      <div class="row">
+        <div class="field"><label>Degree</label><input type="text" class="rb-edu-degree"></div>
+        <div class="field">
+          <label>Institution</label>
+          <div class="rb-search-wrap">
+            <input type="text" class="rb-edu-institution" autocomplete="off" placeholder="Search by school name…">
+            <div class="rb-suggestions hidden"></div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Location <span class="opt">(optional)</span></label><input type="text" class="rb-edu-location"></div>
+        <div class="field"><label>Graduation Year <span class="opt">(optional)</span></label><input type="text" class="rb-edu-graduated"></div>
+      </div>`;
+
+    wireSearchCombobox({
+      inputEl:    div.querySelector('.rb-edu-institution'),
+      dropdownEl: div.querySelector('.rb-search-wrap .rb-suggestions'),
+      endpoint:   rbInstitutionsEndpoint,
+      renderItemFn: rbInstitutionItemHtml,
+      onSelect: (item, inputEl) => {
+        inputEl.value = item.alias || item.name;
+        const locEl = div.querySelector('.rb-edu-location');
+        const locLabel = [item.city, item.state || item.country].filter(Boolean).join(', ');
+        if (locLabel) locEl.value = locLabel;
+      },
+    });
+
+    return div;
+  }
+
+  function rbCertRow() {
+    const div = document.createElement('div');
+    div.className = 'repeat-row rb-cert-row';
+    div.style.cssText = 'display:flex;gap:.5rem;align-items:flex-start;margin-bottom:.5rem';
+    div.innerHTML = `
+      <input type="text" class="rb-cert-name" placeholder="Certification name" style="flex:2">
+      <input type="text" class="rb-cert-issuer" placeholder="Issuer" style="flex:2">
+      <input type="text" class="rb-cert-year" placeholder="Year" style="flex:1">
+      <button type="button" class="repeat-remove-btn" title="Remove">&#x2715;</button>`;
+    return div;
+  }
+
+  document.getElementById('rbAddJob').addEventListener('click', () => {
+    document.getElementById('rbJobs').appendChild(rbJobRow());
+  });
+  document.getElementById('rbAddEducation').addEventListener('click', () => {
+    document.getElementById('rbEducation').appendChild(rbEducationRow());
+  });
+  document.getElementById('rbAddCert').addEventListener('click', () => {
+    document.getElementById('rbCerts').appendChild(rbCertRow());
+  });
+  // Start with one of each — the common case (at least one job) needs zero clicks.
+  document.getElementById('rbJobs').appendChild(rbJobRow());
+  document.getElementById('rbEducation').appendChild(rbEducationRow());
+
+  const RB_MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function formatMonthValue(v) {
+    if (!v) return '';
+    const [y, m] = v.split('-');
+    const name = RB_MONTH_NAMES[parseInt(m, 10) - 1];
+    return name ? `${name} ${y}` : v;
+  }
+
+  function rbCollectJobs() {
+    return [...document.querySelectorAll('#rbJobs .rb-job-row')].map(row => ({
+      company:  row.querySelector('.rb-job-company').value.trim(),
+      title:    row.querySelector('.rb-job-title').value.trim(),
+      location: row.querySelector('.rb-job-location').value.trim(),
+      start:    formatMonthValue(row.querySelector('.rb-job-start').value),
+      end:      formatMonthValue(row.querySelector('.rb-job-end').value),
+      current:  row.querySelector('.rb-job-current').checked,
+      bullets:  [...row.querySelectorAll('.rb-bullet-text')].map(t => t.value.trim()).filter(Boolean),
+    })).filter(j => j.company || j.title || j.bullets.length);
+  }
+
+  function rbCollectEducation() {
+    return [...document.querySelectorAll('#rbEducation .rb-edu-row')].map(row => ({
+      degree:      row.querySelector('.rb-edu-degree').value.trim(),
+      institution: row.querySelector('.rb-edu-institution').value.trim(),
+      location:    row.querySelector('.rb-edu-location').value.trim(),
+      graduated:   row.querySelector('.rb-edu-graduated').value.trim(),
+    })).filter(e => e.degree || e.institution);
+  }
+
+  function rbCollectCerts() {
+    return [...document.querySelectorAll('#rbCerts .rb-cert-row')].map(row => ({
+      name:   row.querySelector('.rb-cert-name').value.trim(),
+      issuer: row.querySelector('.rb-cert-issuer').value.trim(),
+      year:   row.querySelector('.rb-cert-year').value.trim(),
+    })).filter(c => c.name);
+  }
+
+  const rbLogEl     = document.getElementById('rbLogEl');
+  const rbInlineErr = document.getElementById('rbInlineErr');
+  const rbBadge     = document.getElementById('rbStatusBadge');
+  const rbSubmitBtn = document.getElementById('rbSubmitBtn');
+
+  function rbAppendLog(msg) {
+    rbLogEl.textContent += msg + '\n';
+    rbLogEl.scrollTop = rbLogEl.scrollHeight;
+  }
+  function setRbBadge(status) {
+    rbBadge.className = `badge badge-${status}`;
+    rbBadge.textContent = { running: 'Running…', queued: 'Queued', done: 'Done', error: 'Error' }[status] ?? status;
+  }
+
+  document.getElementById('rbForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const jobs      = rbCollectJobs();
+    const education = rbCollectEducation();
+    const certs     = rbCollectCerts();
+    const skills    = document.getElementById('rbSkills').value.split('\n').map(s => s.trim()).filter(Boolean);
+
+    const hasJobContent = jobs.some(j => j.company && j.title && j.bullets.length);
+    const hasEducation  = education.some(ed => ed.degree && ed.institution);
+    if (!hasJobContent && !hasEducation) {
+      rbInlineErr.textContent = '❌ Add at least one job (with a bullet point) or one education entry.';
+      rbInlineErr.style.display = 'block';
+      return;
+    }
+
+    const body = {
+      template:  document.getElementById('rbTemplate').value,
+      full_name: document.getElementById('rbFullName').value.trim(),
+      email:     document.getElementById('rbEmail').value.trim(),
+      phone:     document.getElementById('rbPhone').value.trim(),
+      location:  document.getElementById('rbLocation').value.trim(),
+      linkedin:  document.getElementById('rbLinkedin').value.trim(),
+      website:   document.getElementById('rbWebsite').value.trim(),
+      summary:   document.getElementById('rbSummary').value.trim(),
+      skills, jobs, education, certs,
+      polish: document.getElementById('rbPolish').checked,
+    };
+
+    rbSubmitResume(body);
+  });
+
+  async function rbSubmitResume(body) {
+    rbLogEl.textContent = '';
+    rbInlineErr.style.display = 'none';
+    hide('rbResultsCard');
+    show('rbProgressCard');
+    rbSubmitBtn.disabled = true;
+    rbSubmitBtn.innerHTML = '<span class="spin"></span> Building…';
+    setRbBadge('running');
+
+    let run_id;
+    try {
+      const res = await apiFetch('/api/resume-builder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.status === 409) {
+        hide('rbProgressCard');
+        rbSubmitBtn.disabled = false;
+        rbSubmitBtn.textContent = 'Build My Resume';
+        if (confirm('You already have a master resume on file. Replace it with this new one? Your current resume will be saved as a backup you can download or restore from your Profile page.')) {
+          rbSubmitResume({ ...body, confirm_overwrite: true });
+        }
+        return;
+      }
+      if (!res.ok) throw new Error((await res.json()).detail ?? `Server error ${res.status}`);
+      const data = await res.json();
+      run_id = data.run_id;
+      if (data.machine_id) document.cookie = `fly-force-instance-id=${data.machine_id}; path=/; samesite=lax`;
+    } catch (err) {
+      if (err.message === '401') return;
+      rbAppendLog('❌ Failed to start: ' + err.message);
+      setRbBadge('error');
+      rbSubmitBtn.disabled = false;
+      rbSubmitBtn.textContent = 'Build My Resume';
+      return;
+    }
+
+    const es = new EventSource(`/api/resume-builder/${run_id}/stream`);
+
+    es.onmessage = (evt) => {
+      const msg = JSON.parse(evt.data);
+      if (msg.type === 'progress') {
+        rbAppendLog(msg.message);
+      } else if (msg.type === 'done') {
+        es.close();
+        setRbBadge('done');
+        rbSubmitBtn.disabled = false;
+        rbSubmitBtn.textContent = 'Build My Resume';
+        rbShowResults(run_id, msg);
+      } else if (msg.type === 'error') {
+        es.close();
+        setRbBadge('error');
+        rbSubmitBtn.disabled = false;
+        rbSubmitBtn.textContent = 'Build My Resume';
+        rbInlineErr.textContent = '❌ ' + msg.message;
+        rbInlineErr.style.display = 'block';
+      }
+    };
+
+    es.onerror = () => {
+      if (rbBadge.className.includes('done') || rbBadge.className.includes('error')) return;
+      es.close();
+      setRbBadge('error');
+      rbAppendLog('\n⚠ Connection lost. Your run may still be processing.');
+      rbSubmitBtn.disabled = false;
+      rbSubmitBtn.textContent = 'Build My Resume';
+    };
+  }
+
+  function rbShowResults(run_id, msg) {
+    const card = document.getElementById('rbResultsCard');
+    show('rbResultsCard');
+    card.classList.add('results-appear');
+
+    const grid = document.getElementById('rbFileGrid');
+    grid.innerHTML = '';
+    const name = msg.files?.resume;
+    if (name) {
+      const a = document.createElement('a');
+      a.className = 'file-card';
+      a.href     = `/api/resume-builder/${run_id}/files/${encodeURIComponent(name)}`;
+      a.download = name;
+      a.title    = name;
+      a.innerHTML = `
+        <div class="file-card-icon">📄</div>
+        <div class="file-card-label">Master Resume</div>
+        <div class="file-card-desc">DOCX — saved as your live master resume</div>
+        <div class="file-card-dl">&#x2193;&nbsp;Download</div>`;
+      grid.appendChild(a);
+    }
+  }
+
+  document.getElementById('rbNewBtn').addEventListener('click', () => {
+    document.getElementById('rbResultsCard').classList.remove('results-appear');
+    hide('rbResultsCard');
+    hide('rbProgressCard');
+    document.getElementById('rbFileGrid').innerHTML = '';
   });
 </script>
 </div><!-- /.container -->

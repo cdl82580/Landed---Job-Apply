@@ -198,8 +198,17 @@ def save_user(user: dict[str, Any]) -> None:
 _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
-def save_resume(user_id: str, data: bytes) -> None:
+def save_resume(user_id: str, data: bytes) -> bool:
+    """Save the user's master resume, first stashing whatever was there as a
+    single-slot backup (resumes/{user_id}/master_previous.docx) so an
+    overwrite can be undone. Returns True if a previous resume existed and
+    was backed up, False if this was the user's first resume."""
+    existing = get_bytes(f"resumes/{user_id}/master.docx")
+    backed_up = existing is not None
+    if backed_up:
+        put_bytes(f"resumes/{user_id}/master_previous.docx", existing, _DOCX_MIME)
     put_bytes(f"resumes/{user_id}/master.docx", data, _DOCX_MIME)
+    return backed_up
 
 
 def get_resume(user_id: str) -> bytes | None:
@@ -213,6 +222,26 @@ def has_resume(user_id: str) -> bool:
     if cached is not None:
         return cached
     return cache.put(ck, exists(f"resumes/{user_id}/master.docx"))
+
+
+def get_previous_resume(user_id: str) -> bytes | None:
+    return get_bytes(f"resumes/{user_id}/master_previous.docx")
+
+
+def has_previous_resume(user_id: str) -> bool:
+    return exists(f"resumes/{user_id}/master_previous.docx")
+
+
+def restore_previous_resume(user_id: str) -> bool:
+    """Swap the backup back to current. Goes through save_resume so the
+    just-replaced current version becomes the new backup — a symmetric
+    swap, not a delete, so restoring twice returns to the original state.
+    Returns False if there's no backup to restore."""
+    previous = get_bytes(f"resumes/{user_id}/master_previous.docx")
+    if previous is None:
+        return False
+    save_resume(user_id, previous)
+    return True
 
 
 def save_profile(user_id: str, text: str) -> None:

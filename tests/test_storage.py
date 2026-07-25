@@ -140,6 +140,44 @@ class TestResumeOps:
     def test_has_resume_false(self, store):
         assert store.has_resume("uid-nobody") is False
 
+    def test_first_save_returns_false_and_no_backup(self, store):
+        backed_up = store.save_resume("uid-1", b"v1")
+        assert backed_up is False
+        assert store.has_previous_resume("uid-1") is False
+        assert store.get_previous_resume("uid-1") is None
+
+    def test_second_save_returns_true_and_backs_up_first(self, store):
+        store.save_resume("uid-1", b"v1")
+        backed_up = store.save_resume("uid-1", b"v2")
+        assert backed_up is True
+        assert store.has_previous_resume("uid-1") is True
+        assert store.get_previous_resume("uid-1") == b"v1"
+        assert store.get_resume("uid-1") == b"v2"
+
+    def test_restore_swaps_current_and_backup(self, store):
+        store.save_resume("uid-1", b"v1")
+        store.save_resume("uid-1", b"v2")
+        restored = store.restore_previous_resume("uid-1")
+        assert restored is True
+        assert store.get_resume("uid-1") == b"v1"
+        assert store.get_previous_resume("uid-1") == b"v2"
+
+    def test_restore_twice_returns_to_original(self, store):
+        store.save_resume("uid-1", b"v1")
+        store.save_resume("uid-1", b"v2")
+        store.restore_previous_resume("uid-1")
+        store.restore_previous_resume("uid-1")
+        assert store.get_resume("uid-1") == b"v2"
+        assert store.get_previous_resume("uid-1") == b"v1"
+
+    def test_restore_with_no_backup_returns_false(self, store):
+        store.save_resume("uid-1", b"v1")
+        assert store.restore_previous_resume("uid-1") is False
+        assert store.get_resume("uid-1") == b"v1"
+
+    def test_restore_with_nothing_at_all_returns_false(self, store):
+        assert store.restore_previous_resume("uid-nobody") is False
+
 
 class TestProfileOps:
     def test_save_and_get(self, store):

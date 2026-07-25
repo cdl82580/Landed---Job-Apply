@@ -103,14 +103,32 @@ class MemoryStore:
         user["email"] = new_email.strip().lower()
         self.save_user(user)
 
-    def save_resume(self, user_id: str, data: bytes) -> None:
+    def save_resume(self, user_id: str, data: bytes) -> bool:
+        existing = self.get_bytes(f"resumes/{user_id}/master.docx")
+        backed_up = existing is not None
+        if backed_up:
+            self.put_bytes(f"resumes/{user_id}/master_previous.docx", existing)
         self.put_bytes(f"resumes/{user_id}/master.docx", data)
+        return backed_up
 
     def get_resume(self, user_id: str) -> bytes | None:
         return self.get_bytes(f"resumes/{user_id}/master.docx")
 
     def has_resume(self, user_id: str) -> bool:
         return self.exists(f"resumes/{user_id}/master.docx")
+
+    def get_previous_resume(self, user_id: str) -> bytes | None:
+        return self.get_bytes(f"resumes/{user_id}/master_previous.docx")
+
+    def has_previous_resume(self, user_id: str) -> bool:
+        return self.exists(f"resumes/{user_id}/master_previous.docx")
+
+    def restore_previous_resume(self, user_id: str) -> bool:
+        previous = self.get_bytes(f"resumes/{user_id}/master_previous.docx")
+        if previous is None:
+            return False
+        self.save_resume(user_id, previous)
+        return True
 
     def save_profile(self, user_id: str, text: str) -> None:
         self.put_text(f"profiles/{user_id}/profile.md", text)
@@ -146,6 +164,23 @@ def patch_storage(monkeypatch):
         if not attr.startswith("_"):
             monkeypatch.setattr(_real_storage, attr, getattr(_store, attr))
     yield
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    """Clear api._rl_buckets before each test.
+
+    Rate-limit state is a plain module-level dict (api.py:_rl_buckets), not
+    otherwise test-isolated — without this, tests that call a rate-limited
+    endpoint (e.g. /api/profile/resume, capped at 10/hr) enough times across
+    a test file can trip the real limit and get a silent 429 instead of the
+    200 the test expects, since the same client IP is reused for every
+    TestClient request.
+    """
+    import api as _api
+    _api._rl_buckets.clear()
+    yield
+    _api._rl_buckets.clear()
 
 
 # ── FastAPI TestClient ─────────────────────────────────────────────────────────

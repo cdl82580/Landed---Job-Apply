@@ -11,6 +11,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 ## Features
 
 ### Agent
+- **Master Resume Builder** — guided Q&A wizard for users who don't have a master resume yet (or want to rebuild one): repeatable job/education/certification entries with add/remove bullet-point rows, one of three original DOCX templates (Technical/ATS-Clean, Traditional/Chronological, Executive/Leadership with a competency grid), optional single Claude polish pass that tightens wording without inventing facts or numbers. Smart input fields: native email/URL validation, live phone number formatting as-you-type (`libphonenumber-js`, national format per country), month/year date pickers for job dates, and search-as-you-type autocomplete for city fields (OpenStreetMap Nominatim, proxied server-side) and the education institution field (US Dept of Education College Scorecard, falling back to the Hipolabs universities API for schools outside the US — results show a logo.dev thumbnail, name/alias, and city/state/country). Generating a new resume saves it directly as the user's live master resume; if one already exists, generating a new one requires explicit overwrite confirmation and automatically keeps the replaced version as a one-slot backup (downloadable and restorable from the Profile page — see Auth & Accounts below). Pinned as the first card on the Agent page since it's the prerequisite for every other agent.
 - **Tailored resume** — styled DOCX with brand colors, targeted bullets, competency grid
 - **ATS resume** — plain single-column DOCX, no tables or text boxes, parser-safe
 - **Cover letter** — voice-matched DOCX tailored to the role and hiring manager
@@ -52,6 +53,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - Role-based access: `user` and `admin` roles
 - Admin accounts restricted to the admin dashboard only
 - Per-request session validation checks `active` flag and password-change fingerprint (`pwv`)
+- **Master resume backup** — every time the master resume is overwritten (manual upload, Slack/Teams DM, or the Resume Builder wizard), the previous version is automatically kept in a single backup slot; the Profile page shows a download link and a "Restore this version" button (restoring is a symmetric swap, not a delete, so it can be undone by restoring again)
 
 ### Security
 - `Strict-Transport-Security`, `X-Frame-Options`, `X-Content-Type-Options`, `Content-Security-Policy`, `Referrer-Policy` on every response
@@ -115,10 +117,13 @@ in a loop if either 404s or redirects to login.
 
 ## Agents at a Glance
 
-Six distinct Claude-powered agents, all triggerable from the web app plus Slack/Teams (CLI is resume-only):
+Seven distinct Claude-powered agents. Six are triggerable from the web app plus
+Slack/Teams (CLI is resume-only); the Master Resume Builder is web-only since it's
+a first-time setup flow, not something you'd run mid-conversation in a bot:
 
 | Agent | What it produces | Web (Agent tab) | Slack | Teams | API |
 |---|---|---|---|---|---|
+| **Master Resume Builder** | A brand-new master resume DOCX from a guided Q&A wizard, saved as your live master resume | Build Master Resume | — | — | `POST /api/resume-builder` |
 | **Resume + ATS + Cover Letter** | Tailored resume DOCX, ATS-safe resume DOCX, cover letter DOCX | Generate | `/apply` | `apply` | `POST /api/run` |
 | **Application Questions** | Answer to a freeform application question, with clarification follow-ups | Application Questions | `/aq` | `aq` | `POST /api/aq` |
 | **Interview Prep** | 2-page interview prep reference DOCX | Interview Prep | `/prep` | `prep` | `POST /api/prep` |
@@ -126,9 +131,11 @@ Six distinct Claude-powered agents, all triggerable from the web app plus Slack/
 | **Optimize** | In-place revision of an existing run's resume/cover letter from a freeform instruction | Optimize | `/optimize` | `optimize` | `POST /api/optimize` |
 | **Rescore (Match Scoring)** | Resume↔JD fit score (0–100), category, and per-dimension breakdown | Tracker row → Score/Rescore button | `/rescore` | `rescore` | `POST /api/applications/{id}/score` |
 
-All six require a job description resolvable from a tracked application (either a saved
-`job_description.md` in its Drive folder, or its posting URL) except the first run of
-`apply`, which also accepts a pasted job posting directly. See the KB's
+The six job-application agents require a job description resolvable from a tracked
+application (either a saved `job_description.md` in its Drive folder, or its posting
+URL) except the first run of `apply`, which also accepts a pasted job posting directly.
+The Master Resume Builder needs no JD at all — it only needs your work history, entered
+directly in the wizard. See the KB's
 ["All the Agents"](https://apply.cdlav.us/kb.html#gs-agents-overview) article
 for a plain-language walkthrough, or the per-command sections below ([Slack Commands](#slack-commands),
 [Teams Commands](#teams-commands)) for exact syntax.
@@ -170,16 +177,19 @@ job-apply/
 │   ├── privacy.html           ← Privacy policy (public, unauthenticated — required by the Teams manifest's privacyUrl)
 │   ├── terms.html             ← Terms of use (public, unauthenticated — required by the Teams manifest's termsOfUseUrl)
 │   ├── marked.min.js          ← Bundled marked.js (used by profile.html)
+│   ├── libphonenumber-min.js  ← Vendored libphonenumber-js UMD bundle (Resume Builder phone formatting)
 │   └── img/                   ← logo.png + landing page assets (Slack/Teams brand icons, Unsplash photos)
 ├── routers/
 │   ├── applications.py        ← Tracker CRUD + comments + linked runs
 │   ├── calendar.py            ← Calendar event + reminder CRUD
 │   ├── companies.py           ← Logo.dev company search proxy
+│   ├── lookups.py             ← Location (Nominatim) + institution (College Scorecard/Hipolabs) search proxies
 │   ├── auth_google.py         ← Google OAuth flow
 │   ├── admin.py               ← Admin-only endpoints + webhooks + audit
 │   └── kb.py                  ← Knowledge Base CRUD (public list + admin create/update/delete/seed)
 ├── scripts/
 │   ├── storage.py             ← Tigris S3 adapter
+│   ├── resume_builder.py      ← Master Resume Builder: AI polish + Node/docx template rendering
 │   ├── applications.py        ← Application storage layer
 │   ├── calendar.py            ← Calendar + reminder storage layer
 │   ├── session.py             ← Shared HMAC session token helpers
@@ -201,7 +211,7 @@ job-apply/
 ## Web App Usage
 
 1. Go to https://apply.cdlav.us/ — public marketing/landing page (`frontend/index.html`); logged-in visitors are auto-redirected to `/tracking.html` (or `/admin.html`)
-2. Register (email/password or Google) and upload `master.docx` + paste your `profile.md`
+2. Register (email/password or Google) and either upload `master.docx` directly or use the **Build Master Resume** wizard on the Agent tab if you don't have one yet, then paste your `profile.md`
 3. **Agent tab** — paste a job posting, enter company + role, hit **Generate**; use **Application Questions** to draft answers to supplemental app questions; or use **Interview Prep** for a prep doc
 4. **Tracker tab** — track applications, add notes, link to agent runs
 5. **Calendar tab** — view and manage interview events and deadlines with Slack/email reminders
@@ -209,6 +219,14 @@ job-apply/
 7. **API Reference** (`/api-docs.html`) — full endpoint browser rendered from the Postman collection, with a ⬇ download button for the collection JSON
 8. **Profile** — update display name, email, password, profile guide (Markdown editor), and resume
 9. Admins are redirected to `/admin.html` automatically
+
+### Build Master Resume
+- For users with no master resume on file yet — the card auto-expands and is pinned first on the Agent tab until you have one
+- Guided wizard: résumé style (Technical/ATS-Clean, Traditional/Chronological, or Executive/Leadership), contact info, repeatable work-experience entries (each with add/remove bullet-point rows), education, certifications, skills
+- Smart fields: native email/URL validation, live phone formatting as you type, month/year pickers for job dates, and search-as-you-type autocomplete for city fields and the education institution field (shows a logo, name, and city/state/country — pick a result or keep typing freely, e.g. "Remote")
+- Optional single AI polish pass tightens wording without inventing facts, numbers, or achievements you didn't provide
+- On completion the DOCX is both offered as a direct download and saved as your live master resume — every other agent can use it immediately, no separate upload step
+- If you already have a master resume, generating a new one asks for confirmation and automatically keeps the replaced version as a downloadable/restorable backup (see Profile page)
 
 ### Application Questions
 - Select an existing tracker application — requires a saved `job_description.md` in the app's Drive folder
@@ -447,6 +465,7 @@ Both process groups share the same Docker image and all Fly secrets.
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
 | `LOGODEV_API_KEY` | Logo.dev secret key (`sk_`) for company search API |
+| `COLLEGE_SCORECARD_API_KEY` | US Dept of Education College Scorecard API key — powers the Resume Builder's institution search (`GET /api/lookups/institutions`); falls back to the (keyless) Hipolabs universities API for non-US schools or if unset |
 | `BOT_API_KEY` | Shared secret between the Slack bot, Teams bot, and web API |
 | `SLACK_BOT_TOKEN` | Slack bot token (`xoxb-...`) |
 | `SLACK_SIGNING_SECRET` | Slack signing secret |
@@ -494,7 +513,9 @@ See `JobApply.postman_collection.json` for the full request/response reference.
 | POST | `/api/auth/reset-password` | — | Set new password using a one-time reset token (expires in 1 hour; rate-limited: 5/hr) |
 | GET | `/api/profile` | cookie | Profile + resume metadata |
 | PUT | `/api/profile` | cookie | Update display name or profile text |
-| POST | `/api/profile/resume` | cookie | Replace master resume (rate-limited: 10/hr) |
+| POST | `/api/profile/resume` | cookie | Replace master resume (rate-limited: 10/hr); the previous version is automatically kept as a one-slot backup |
+| GET | `/api/profile/resume/previous` | cookie | Download the previous master resume backup (404 if none) |
+| POST | `/api/profile/resume/restore` | cookie | Swap the backup back to being the live master resume (symmetric swap, not a delete; rate-limited: 10/hr) |
 | POST | `/api/profile/password` | cookie | Change password (rate-limited: 5/hr) |
 | POST | `/api/profile/email` | cookie | Change email — requires current password, sends re-verification, invalidates session (rate-limited: 5/hr) |
 | GET | `/api/audit/me` | cookie | Current user's audit event log |
@@ -519,6 +540,12 @@ See `JobApply.postman_collection.json` for the full request/response reference.
 | POST | `/api/applications/{id}/extract-jd` | cookie | Extract JD text from the app's posting URL via Claude |
 | POST | `/api/applications/{id}/setup-folder` | cookie | Create Drive folder + attempt JD capture in background; returns 202 immediately |
 | GET | `/api/companies/search?q=` | — | Logo.dev company search — returns `name`, `domain`, `description`; logos constructed client-side via `img.logo.dev` |
+| GET | `/api/lookups/locations?q=` | cookie | City/place autocomplete (OpenStreetMap Nominatim) for the Resume Builder's location fields — returns `label`, `city`, `state`, `country`, `country_code` |
+| GET | `/api/lookups/institutions?q=` | cookie | School autocomplete for the Resume Builder's education fields — US Dept of Education College Scorecard, falling back to the Hipolabs universities API for non-US schools — returns `name`, `alias`, `city`, `state`, `country`, `domain` |
+| POST | `/api/resume-builder` | cookie | Build a new master resume from the wizard's structured Q&A data → returns `{run_id, machine_id}`; 409 if a master resume already exists and `confirm_overwrite` isn't set; admin accounts cannot use this |
+| GET | `/api/resume-builder/{id}/stream` | cookie | SSE progress stream (`done` event includes `files.resume`) |
+| GET | `/api/resume-builder/{id}/status` | cookie | Poll resume-builder run status |
+| GET | `/api/resume-builder/{id}/files/{name}` | cookie | Download the generated master resume DOCX |
 | POST | `/api/run` | cookie | Start resume generation run → returns `{run_id, machine_id}`; accepts `jd_folder_id` to load JD server-side from Drive |
 | GET | `/api/run/{id}/stream` | cookie | SSE progress stream (`done` event includes `replacements_warning` if < 70% XML edits succeeded) |
 | GET | `/api/run/{id}/status` | cookie | Poll run status |

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Job Apply API",
-    "description": "Complete API reference for the Job Application Agent (https://apply.cdlav.us/).\n\n**Auth model:** stateless HMAC-signed `HttpOnly` session cookie (`session`, 30-day TTL). Login/register set the cookie automatically. All protected requests include it. Admins also accepted via `Authorization: Bearer {BOT_API_KEY}` header.\n\n**Run lifecycle (application & prep):**\n1. POST to start → returns `run_id` / `prep_id`\n2. GET `…/stream` → SSE; events: `progress` (log line), `done` (files + folder_url + optional replacements_warning), `error`\n3. `done` event contains `files` with filenames\n4. GET `…/files/{name}` → download DOCX\n\n**Rate limits (per IP, sliding window):**\n- Login: 10/min\n- Register: 5/hr\n- Resend-verification: 3/hr\n- Change password: 5/hr\n- Change email: 5/hr\n- Resume upload: 10/hr\n- Forgot password: 3/hr\n- Reset password: 5/hr\n- Company search: 30/min\n\n**Security headers on every response:** HSTS (2-year), X-Frame-Options: DENY, X-Content-Type-Options: nosniff, CSP, Referrer-Policy.\n\n**Base URL:** `{{base_url}}` defaults to `https://apply.cdlav.us`. Override with `http://localhost:8000` for local dev.",
+    "description": "Complete API reference for the Job Application Agent (https://apply.cdlav.us/).\n\n**Auth model:** stateless HMAC-signed `HttpOnly` session cookie (`session`, 30-day TTL). Login/register set the cookie automatically. All protected requests include it. Admins also accepted via `Authorization: Bearer {BOT_API_KEY}` header.\n\n**Run lifecycle (application & prep):**\n1. POST to start → returns `run_id` / `prep_id`\n2. GET `…/stream` → SSE; events: `progress` (log line), `done` (files + folder_url + optional replacements_warning), `error`\n3. `done` event contains `files` with filenames\n4. GET `…/files/{name}` → download DOCX\n\n**Rate limits (per IP, sliding window):**\n- Login: 10/min\n- Register: 5/hr\n- Resend-verification: 3/hr\n- Change password: 5/hr\n- Change email: 5/hr\n- Resume upload: 10/hr\n- Forgot password: 3/hr\n- Reset password: 5/hr\n- Company search: 30/min\n- Location/institution search: 30/min\n- Restore previous resume: 10/hr\n\n**Security headers on every response:** HSTS (2-year), X-Frame-Options: DENY, X-Content-Type-Options: nosniff, CSP, Referrer-Policy.\n\n**Base URL:** `{{base_url}}` defaults to `https://apply.cdlav.us`. Override with `http://localhost:8000` for local dev.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -288,7 +288,7 @@
           "request": {
             "method": "GET",
             "url": "{{base_url}}/api/profile",
-            "description": "Returns: `display_name`, `email`, `role`, `email_verified`, `profile_text`, `has_resume`, `resume_filename`."
+            "description": "Returns: `display_name`, `email`, `role`, `email_verified`, `profile_text`, `has_resume`, `resume_filename`, `resume_uploaded_at`, `has_previous_resume`, `resume_previous_saved_at`."
           }
         },
         {
@@ -361,6 +361,22 @@
               "mode": "raw",
               "raw": "{\n  \"new_email\": \"new@example.com\",\n  \"current_password\": \"your-password\"\n}"
             }
+          }
+        },
+        {
+          "name": "GET /api/profile/resume/previous",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/profile/resume/previous",
+            "description": "Download the previous master resume backup (created automatically the last time the resume was overwritten). 404 if none exists."
+          }
+        },
+        {
+          "name": "POST /api/profile/resume/restore",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/profile/resume/restore",
+            "description": "Swap the previous resume backup back to being the live master resume. The just-replaced current version becomes the new backup (a symmetric swap, not a delete) — calling restore twice returns to the original state. 404 if there's no backup to restore. Rate-limited: 10/hr per IP."
           }
         }
       ]
@@ -679,6 +695,28 @@
       ]
     },
     {
+      "name": "Lookups",
+      "description": "Server-side proxies for the Master Resume Builder's autocomplete fields, so third-party API keys stay off the client. Both require the session cookie (unlike Companies search, which is public).",
+      "item": [
+        {
+          "name": "GET /api/lookups/locations",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/lookups/locations?q=boston",
+            "description": "City/place autocomplete (OpenStreetMap Nominatim). Returns up to 6 matches: `[{label, city, state, country, country_code}]`. Results cached 5 min server-side."
+          }
+        },
+        {
+          "name": "GET /api/lookups/institutions",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/lookups/institutions?q=harvard",
+            "description": "School autocomplete. Tries the US Dept of Education College Scorecard API first, falling back to the Hipolabs universities API for schools outside the US (or if `COLLEGE_SCORECARD_API_KEY` isn't set). Returns up to 8 matches: `[{name, alias, city, state, country, domain}]` — `domain` is used client-side to build a logo.dev thumbnail. Results cached 5 min server-side."
+          }
+        }
+      ]
+    },
+    {
       "name": "Utilities",
       "item": [
         {
@@ -713,6 +751,60 @@
             "method": "GET",
             "url": "{{base_url}}/api/postman",
             "description": "Download this Postman collection as JSON. Backs the ⬇ download button on `/api-docs.html`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Master Resume Builder",
+      "description": "Guided Q&A wizard that builds a brand-new master resume DOCX from structured job/education/cert data and saves it as the user's live master resume — for users who don't have one yet. Same POST → SSE stream → download lifecycle as Application Runs. Admin accounts cannot use this endpoint.\n\n**`done` event shape:**\n```json\n{\n  \"type\": \"done\",\n  \"resume_builder_id\": \"…\",\n  \"files\": {\"resume\": \"master.docx\"}\n}\n```\n\nIf the user already has a master resume, the request returns `409` unless `confirm_overwrite: true` is set — the previous resume is automatically kept as a one-slot backup (see `GET /api/profile/resume/previous` / `POST /api/profile/resume/restore` in the Profile folder).",
+      "item": [
+        {
+          "name": "POST /api/resume-builder",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/resume-builder",
+            "description": "Start a resume-builder run. Returns `{run_id, machine_id}`. `template` is one of `technical` / `traditional` / `executive`. `polish` (default true) runs one Claude pass to tighten wording without inventing facts. Requires at least one job (with a bullet) or one education entry.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"template\": \"technical\",\n  \"full_name\": \"Jane Doe\",\n  \"email\": \"jane@example.com\",\n  \"phone\": \"(978) 790-4272\",\n  \"location\": \"Boston, Massachusetts\",\n  \"linkedin\": \"https://linkedin.com/in/janedoe\",\n  \"website\": \"https://janedoe.dev\",\n  \"summary\": \"\",\n  \"skills\": [\n    \"Python\",\n    \"REST APIs\",\n    \"Salesforce\"\n  ],\n  \"jobs\": [\n    {\n      \"company\": \"Acme Corp\",\n      \"title\": \"Solutions Engineer\",\n      \"location\": \"Boston, Massachusetts\",\n      \"start\": \"Jan 2020\",\n      \"end\": \"\",\n      \"current\": true,\n      \"bullets\": [\n        \"Built and shipped 12 production integrations.\"\n      ]\n    }\n  ],\n  \"education\": [\n    {\n      \"degree\": \"B.S. Computer Science\",\n      \"institution\": \"Harvard University\",\n      \"location\": \"Cambridge, MA\",\n      \"graduated\": \"2015\"\n    }\n  ],\n  \"certs\": [],\n  \"polish\": true,\n  \"confirm_overwrite\": false,\n  \"model\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "GET /api/resume-builder/{run_id}/stream",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/resume-builder/{{run_id}}/stream",
+            "description": "SSE stream. Events: `progress`, `done` (files), `error`. Keep-alives every 30s.",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              }
+            ]
+          }
+        },
+        {
+          "name": "GET /api/resume-builder/{run_id}/status",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/resume-builder/{{run_id}}/status",
+            "description": "Poll run status: `queued | running | done | error`. Returns `{run_id, status, error}`."
+          }
+        },
+        {
+          "name": "GET /api/resume-builder/{run_id}/files/{filename}",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/resume-builder/{{run_id}}/files/master.docx",
+            "description": "Download the generated master resume DOCX. Same download it's saved as via storage."
           }
         }
       ]
