@@ -3023,18 +3023,36 @@
   const rbLocationsEndpoint    = '/api/lookups/locations?q=';
   const rbInstitutionsEndpoint = '/api/lookups/institutions?q=';
 
+  // Month/year <select> helpers — used for job dates, graduation year, and
+  // certification year. A <select> guarantees a valid value with no free
+  // typing, unlike a plain text input or a native <input type="month">
+  // (whose calendar popup doesn't let you jump directly to a year on every
+  // browser — only step one year at a time).
+  const RB_MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const RB_CURRENT_YEAR = new Date().getFullYear();
+
+  function rbMonthOptionsHtml() {
+    return '<option value="">Month</option>' +
+      RB_MONTH_NAMES.map(m => `<option value="${m}">${m}</option>`).join('');
+  }
+  function rbYearOptionsHtml(minYear, maxYear) {
+    let html = '<option value="">Year</option>';
+    for (let y = maxYear; y >= minYear; y--) html += `<option value="${y}">${y}</option>`;
+    return html;
+  }
+
   function rbLocationItemHtml(item) {
     return `<div class="rb-sugg-body"><div class="rb-sugg-name">${esc(item.label)}</div></div>`;
   }
 
   function rbInstitutionItemHtml(item) {
-    const displayName = item.alias || item.name;
-    const subtitle = [item.city, item.state || item.country].filter(Boolean).join(', ');
+    const subtitle = [item.city, item.state || item.country].filter(Boolean).join(', ') +
+      (item.alias ? ` · aka ${item.alias}` : '');
     const logo = item.domain
       ? `<img class="rb-sugg-logo" src="${esc(logodevUrl(item.domain, 48))}" alt=""
-           data-company="${esc(displayName)}" data-ph-class="rb-sugg-logo-ph" onerror="logoError(this)">`
-      : `<div class="rb-sugg-logo-ph">${esc(displayName).slice(0,2).toUpperCase()}</div>`;
-    return `${logo}<div class="rb-sugg-body"><div class="rb-sugg-name">${esc(displayName)}</div><div class="rb-sugg-meta">${esc(subtitle)}</div></div>`;
+           data-company="${esc(item.name)}" data-ph-class="rb-sugg-logo-ph" onerror="logoError(this)">`
+      : `<div class="rb-sugg-logo-ph">${esc(item.name).slice(0,2).toUpperCase()}</div>`;
+    return `${logo}<div class="rb-sugg-body"><div class="rb-sugg-name">${esc(item.name)}</div><div class="rb-sugg-meta">${esc(subtitle)}</div></div>`;
   }
 
   wireSearchCombobox({
@@ -3087,9 +3105,21 @@
         </div>
         <div class="field">
           <label>Dates</label>
-          <div style="display:flex;gap:.5rem">
-            <input type="month" class="rb-job-start" style="flex:1">
-            <input type="month" class="rb-job-end" style="flex:1">
+          <div style="display:flex;gap:.75rem;flex-wrap:wrap">
+            <div style="flex:1;min-width:130px">
+              <div style="font-size:.75rem;color:var(--muted);margin-bottom:.25rem">Start</div>
+              <div style="display:flex;gap:.35rem">
+                <select class="rb-job-start-month" style="flex:1.3"></select>
+                <select class="rb-job-start-year" style="flex:1"></select>
+              </div>
+            </div>
+            <div style="flex:1;min-width:130px">
+              <div style="font-size:.75rem;color:var(--muted);margin-bottom:.25rem">End</div>
+              <div style="display:flex;gap:.35rem">
+                <select class="rb-job-end-month" style="flex:1.3"></select>
+                <select class="rb-job-end-year" style="flex:1"></select>
+              </div>
+            </div>
           </div>
           <div class="rb-current-row">
             <input type="checkbox" class="rb-job-current"> <span>Current role</span>
@@ -3101,6 +3131,13 @@
       <button type="button" class="btn btn-ghost rb-add-bullet" style="margin-top:.4rem">+ Add bullet</button>`;
     div.querySelector('.rb-bullets').appendChild(rbBulletRow());
 
+    const monthOpts = rbMonthOptionsHtml();
+    const yearOpts  = rbYearOptionsHtml(RB_CURRENT_YEAR - 60, RB_CURRENT_YEAR);
+    div.querySelector('.rb-job-start-month').innerHTML = monthOpts;
+    div.querySelector('.rb-job-start-year').innerHTML  = yearOpts;
+    div.querySelector('.rb-job-end-month').innerHTML   = monthOpts;
+    div.querySelector('.rb-job-end-year').innerHTML    = yearOpts;
+
     wireSearchCombobox({
       inputEl:    div.querySelector('.rb-job-location'),
       dropdownEl: div.querySelector('.rb-search-wrap .rb-suggestions'),
@@ -3109,10 +3146,12 @@
       onSelect:   (item, inputEl) => { inputEl.value = item.label; },
     });
 
-    const endInput = div.querySelector('.rb-job-end');
+    const endMonthSel = div.querySelector('.rb-job-end-month');
+    const endYearSel  = div.querySelector('.rb-job-end-year');
     div.querySelector('.rb-job-current').addEventListener('change', (e) => {
-      endInput.disabled = e.target.checked;
-      if (e.target.checked) endInput.value = '';
+      endMonthSel.disabled = e.target.checked;
+      endYearSel.disabled  = e.target.checked;
+      if (e.target.checked) { endMonthSel.value = ''; endYearSel.value = ''; }
     });
 
     return div;
@@ -3134,7 +3173,7 @@
     div.innerHTML = `
       <button type="button" class="repeat-remove-btn" title="Remove">&#x2715;</button>
       <div class="row">
-        <div class="field"><label>Degree</label><input type="text" class="rb-edu-degree"></div>
+        <div class="field"><label>Degree</label><input type="text" class="rb-edu-degree" placeholder="e.g. B.S. Biology, M.B.A. — Information Systems"></div>
         <div class="field">
           <label>Institution</label>
           <div class="rb-search-wrap">
@@ -3145,8 +3184,9 @@
       </div>
       <div class="row">
         <div class="field"><label>Location <span class="opt">(optional)</span></label><input type="text" class="rb-edu-location"></div>
-        <div class="field"><label>Graduation Year <span class="opt">(optional)</span></label><input type="text" class="rb-edu-graduated"></div>
+        <div class="field"><label>Graduation Year <span class="opt">(optional)</span></label><select class="rb-edu-graduated"></select></div>
       </div>`;
+    div.querySelector('.rb-edu-graduated').innerHTML = rbYearOptionsHtml(RB_CURRENT_YEAR - 70, RB_CURRENT_YEAR + 6);
 
     wireSearchCombobox({
       inputEl:    div.querySelector('.rb-edu-institution'),
@@ -3154,7 +3194,7 @@
       endpoint:   rbInstitutionsEndpoint,
       renderItemFn: rbInstitutionItemHtml,
       onSelect: (item, inputEl) => {
-        inputEl.value = item.alias || item.name;
+        inputEl.value = item.name;
         const locEl = div.querySelector('.rb-edu-location');
         const locLabel = [item.city, item.state || item.country].filter(Boolean).join(', ');
         if (locLabel) locEl.value = locLabel;
@@ -3171,8 +3211,9 @@
     div.innerHTML = `
       <input type="text" class="rb-cert-name" placeholder="Certification name" style="flex:2">
       <input type="text" class="rb-cert-issuer" placeholder="Issuer" style="flex:2">
-      <input type="text" class="rb-cert-year" placeholder="Year" style="flex:1">
+      <select class="rb-cert-year" style="flex:1"></select>
       <button type="button" class="repeat-remove-btn" title="Remove">&#x2715;</button>`;
+    div.querySelector('.rb-cert-year').innerHTML = rbYearOptionsHtml(RB_CURRENT_YEAR - 60, RB_CURRENT_YEAR + 1);
     return div;
   }
 
@@ -3189,12 +3230,9 @@
   document.getElementById('rbJobs').appendChild(rbJobRow());
   document.getElementById('rbEducation').appendChild(rbEducationRow());
 
-  const RB_MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  function formatMonthValue(v) {
-    if (!v) return '';
-    const [y, m] = v.split('-');
-    const name = RB_MONTH_NAMES[parseInt(m, 10) - 1];
-    return name ? `${name} ${y}` : v;
+  function rbJoinMonthYear(row, monthCls, yearCls) {
+    return [row.querySelector(monthCls).value, row.querySelector(yearCls).value]
+      .filter(Boolean).join(' ');
   }
 
   function rbCollectJobs() {
@@ -3202,8 +3240,8 @@
       company:  row.querySelector('.rb-job-company').value.trim(),
       title:    row.querySelector('.rb-job-title').value.trim(),
       location: row.querySelector('.rb-job-location').value.trim(),
-      start:    formatMonthValue(row.querySelector('.rb-job-start').value),
-      end:      formatMonthValue(row.querySelector('.rb-job-end').value),
+      start:    rbJoinMonthYear(row, '.rb-job-start-month', '.rb-job-start-year'),
+      end:      rbJoinMonthYear(row, '.rb-job-end-month', '.rb-job-end-year'),
       current:  row.querySelector('.rb-job-current').checked,
       bullets:  [...row.querySelectorAll('.rb-bullet-text')].map(t => t.value.trim()).filter(Boolean),
     })).filter(j => j.company || j.title || j.bullets.length);
