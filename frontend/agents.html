@@ -662,9 +662,9 @@
   <div class="card" id="formCard">
     <div class="card-head" id="formToggle">
       <h2>New Application</h2>
-      <span class="chevron open" id="formChevron">&#9660;</span>
+      <span class="chevron" id="formChevron">&#9660;</span>
     </div>
-    <div class="card-body" id="formBody">
+    <div class="card-body hidden" id="formBody">
     <form id="runForm">
 
       <!-- App picker -->
@@ -1201,6 +1201,8 @@
     const autorunAppId = params.get('app_id');
     if (autorunAppId && params.get('autorun') === '1') {
       history.replaceState(null, '', location.pathname);
+      document.getElementById('formBody').classList.remove('hidden');
+      document.getElementById('formChevron').classList.add('open');
       autorunAgent(autorunAppId, runPicker);
     }
   })();
