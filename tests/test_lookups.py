@@ -158,6 +158,35 @@ class TestInstitutionsEndpoint:
             r = authed_client.get("/api/lookups/institutions?q=harvard")
         assert r.status_code == 504
 
+    def test_source_international_skips_scorecard_even_with_key_set(self, authed_client, monkeypatch):
+        """The real motivating case: Scorecard returns non-empty (but wrong)
+        US matches for a query like "oxford", so the ordinary auto-fallback
+        never reaches Hipolabs. source=international must bypass Scorecard
+        entirely rather than only kicking in on a zero-match."""
+        monkeypatch.setattr("routers.lookups._SCORECARD_KEY", "test-key")
+        mock_get = MagicMock(return_value=_resp(HIPOLABS_PAYLOAD))
+        with patch("routers.lookups.requests.get", mock_get):
+            r = authed_client.get("/api/lookups/institutions?q=oxford&source=international")
+        assert r.status_code == 200
+        d = r.json()
+        assert d[0]["name"] == "University of Oxford"
+        assert mock_get.call_count == 1
+        assert "hipolabs" in mock_get.call_args.args[0]
+
+    def test_source_international_and_auto_are_cached_separately(self, authed_client, monkeypatch):
+        monkeypatch.setattr("routers.lookups._SCORECARD_KEY", "test-key")
+        responses = [_resp(SCORECARD_HIT), _resp(HIPOLABS_PAYLOAD)]
+        with patch("routers.lookups.requests.get", side_effect=responses) as mock_get:
+            auto = authed_client.get("/api/lookups/institutions?q=harvard").json()
+            intl = authed_client.get("/api/lookups/institutions?q=harvard&source=international").json()
+        assert mock_get.call_count == 2  # not served from each other's cache entry
+        assert auto[0]["name"] == "Harvard University"
+        assert intl[0]["name"] == "University of Oxford"
+
+    def test_invalid_source_rejected(self, authed_client):
+        r = authed_client.get("/api/lookups/institutions?q=harvard&source=bogus")
+        assert r.status_code == 422
+
 
 class TestHelpers:
     def test_clean_domain_strips_protocol_www_and_path(self):

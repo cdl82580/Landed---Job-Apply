@@ -188,17 +188,29 @@ def _search_hipolabs(q: str) -> list[dict]:
 
 
 @router.get("/institutions")
-async def search_institutions(request: Request, q: str = Query(..., min_length=2)):
+async def search_institutions(
+    request: Request,
+    q: str = Query(..., min_length=2),
+    source: str = Query("auto", pattern="^(auto|international)$"),
+):
+    """`source=international` skips College Scorecard and searches Hipolabs
+    directly — the auto-fallback below only kicks in on a *zero-match*
+    Scorecard result, so a query that returns some (wrong) US schools would
+    otherwise never surface an international match. The frontend offers this
+    as an explicit "search internationally" escape hatch in the dropdown."""
     from api import _check_rate_limit  # deferred: api.py imports this router at module load time
     _check_rate_limit(request, "institution_search", max_hits=30, window_secs=60)
 
-    cache_key = f"institution_search:{q.strip().lower()}"
+    cache_key = f"institution_search:{source}:{q.strip().lower()}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    results = _search_scorecard(q)
-    if not results:  # None (unconfigured/errored) or [] (genuine zero-match) both try Hipolabs
+    if source == "international":
         results = _search_hipolabs(q)
+    else:
+        results = _search_scorecard(q)
+        if not results:  # None (unconfigured/errored) or [] (genuine zero-match) both try Hipolabs
+            results = _search_hipolabs(q)
 
     return cache.put(cache_key, results, ttl=_LOOKUP_CACHE_TTL)

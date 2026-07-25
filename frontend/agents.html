@@ -261,6 +261,12 @@
       padding: .625rem .75rem; font-size: .8rem; color: var(--muted);
       display: flex; align-items: center; gap: .5rem;
     }
+    .rb-sugg-footer {
+      padding: .5rem .75rem; font-size: .78rem; font-weight: 600;
+      color: var(--border); cursor: pointer;
+      border-top: 1px solid var(--card-border);
+    }
+    .rb-sugg-footer:hover { background: var(--fill); }
     .spin-sm {
       display: inline-block; width: 11px; height: 11px;
       border: 2px solid var(--card-border); border-top-color: var(--muted);
@@ -2977,7 +2983,7 @@
   // mousedown-not-click selection (fires before the input's blur), free
   // typing always allowed — a suggestion fills the field but never locks it
   // (needed for values an API won't have, like "Remote" or an unlisted school).
-  function wireSearchCombobox({ inputEl, dropdownEl, endpoint, renderItemFn, onSelect }) {
+  function wireSearchCombobox({ inputEl, dropdownEl, endpoint, renderItemFn, onSelect, emptyMessage, renderFooterFn }) {
     let timer = null;
     inputEl.addEventListener('input', () => {
       const q = inputEl.value.trim();
@@ -2985,37 +2991,54 @@
       if (q.length < 2) { dropdownEl.classList.add('hidden'); dropdownEl.innerHTML = ''; return; }
       dropdownEl.innerHTML = '<div class="rb-sugg-loading"><span class="spin-sm"></span> Searching…</div>';
       dropdownEl.classList.remove('hidden');
-      timer = setTimeout(() => runSearch(q), 320);
+      timer = setTimeout(() => runSearch(q, ''), 320);
     });
     inputEl.addEventListener('blur', () => {
       setTimeout(() => dropdownEl.classList.add('hidden'), 150);
     });
 
-    async function runSearch(q) {
+    // extraParams lets a footer action (e.g. "search internationally") rerun
+    // the same query against a broader endpoint variant without waiting for
+    // another keystroke/debounce cycle.
+    async function runSearch(q, extraParams) {
       let list;
       try {
-        const res = await apiFetch(`${endpoint}${encodeURIComponent(q)}`);
+        const res = await apiFetch(`${endpoint}${encodeURIComponent(q)}${extraParams || ''}`);
         list = res.ok ? await res.json() : [];
       } catch (_) {
         dropdownEl.innerHTML = '<div class="rb-sugg-empty">Search unavailable</div>';
         return;
       }
-      renderResults(list);
+      renderResults(list, q);
     }
 
-    function renderResults(list) {
-      if (!list.length) { dropdownEl.innerHTML = '<div class="rb-sugg-empty">No matches</div>'; return; }
+    function renderResults(list, q) {
       dropdownEl.innerHTML = '';
-      for (const item of list) {
-        const row = document.createElement('div');
-        row.className = 'rb-sugg-item';
-        row.innerHTML = renderItemFn(item);
-        row.addEventListener('mousedown', (e) => {
-          e.preventDefault();
-          onSelect(item, inputEl);
-          dropdownEl.classList.add('hidden');
-        });
-        dropdownEl.appendChild(row);
+      if (!list.length) {
+        const empty = document.createElement('div');
+        empty.className = 'rb-sugg-empty';
+        empty.textContent = emptyMessage || 'No matches — keep typing to use this as free text.';
+        dropdownEl.appendChild(empty);
+      } else {
+        for (const item of list) {
+          const row = document.createElement('div');
+          row.className = 'rb-sugg-item';
+          row.innerHTML = renderItemFn(item);
+          row.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            onSelect(item, inputEl);
+            dropdownEl.classList.add('hidden');
+          });
+          dropdownEl.appendChild(row);
+        }
+      }
+      // Always offered (not just on zero results) — the primary search may
+      // return some matches that just aren't the right one (e.g. searching
+      // "Oxford" only surfaces US schools named Oxford, never the actual
+      // University of Oxford in the UK).
+      if (renderFooterFn) {
+        const footer = renderFooterFn(q, (extraParams) => runSearch(q, extraParams));
+        if (footer) dropdownEl.appendChild(footer);
       }
     }
   }
@@ -3053,6 +3076,21 @@
            data-company="${esc(item.name)}" data-ph-class="rb-sugg-logo-ph" onerror="logoError(this)">`
       : `<div class="rb-sugg-logo-ph">${esc(item.name).slice(0,2).toUpperCase()}</div>`;
     return `${logo}<div class="rb-sugg-body"><div class="rb-sugg-name">${esc(item.name)}</div><div class="rb-sugg-meta">${esc(subtitle)}</div></div>`;
+  }
+
+  // Institution search tries US schools (College Scorecard) first; this
+  // footer lets the user explicitly broaden to the international directory
+  // (Hipolabs) without needing to type differently or get a zero-match first.
+  function rbInstitutionSearchFooter(q, rerun) {
+    const footer = document.createElement('div');
+    footer.className = 'rb-sugg-footer';
+    footer.textContent = "Not listed? Search internationally →";
+    footer.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      footer.textContent = 'Searching internationally…';
+      rerun('&source=international');
+    });
+    return footer;
   }
 
   wireSearchCombobox({
@@ -3193,12 +3231,14 @@
       dropdownEl: div.querySelector('.rb-search-wrap .rb-suggestions'),
       endpoint:   rbInstitutionsEndpoint,
       renderItemFn: rbInstitutionItemHtml,
+      emptyMessage: "No matches — keep typing to enter your school as free text, or try searching internationally below.",
       onSelect: (item, inputEl) => {
         inputEl.value = item.name;
         const locEl = div.querySelector('.rb-edu-location');
         const locLabel = [item.city, item.state || item.country].filter(Boolean).join(', ');
         if (locLabel) locEl.value = locLabel;
       },
+      renderFooterFn: rbInstitutionSearchFooter,
     });
 
     return div;

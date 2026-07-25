@@ -711,7 +711,7 @@
           "request": {
             "method": "GET",
             "url": "{{base_url}}/api/lookups/institutions?q=harvard",
-            "description": "School autocomplete. Tries the US Dept of Education College Scorecard API first, falling back to the Hipolabs universities API for schools outside the US (or if `COLLEGE_SCORECARD_API_KEY` isn't set). Returns up to 8 matches: `[{name, alias, city, state, country, domain}]` — `domain` is used client-side to build a logo.dev thumbnail. Results cached 5 min server-side."
+            "description": "School autocomplete. Tries the US Dept of Education College Scorecard API first, falling back to the Hipolabs universities API only on a *zero-match* Scorecard result (or if `COLLEGE_SCORECARD_API_KEY` isn't set). Returns up to 8 matches: `[{name, alias, city, state, country, domain}]` — `domain` is used client-side to build a logo.dev thumbnail. Results cached 5 min server-side (auto and international results cached separately).\n\nAdd `&source=international` to search Hipolabs directly instead — a Scorecard hit that returns some (wrong) US schools would otherwise never fall through to the international directory, e.g. searching \"oxford\" only surfaces US schools literally named Oxford, never the actual University of Oxford in the UK."
           }
         }
       ]
