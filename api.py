@@ -615,6 +615,7 @@ _PUBLIC_PATHS = frozenset({
     "/favicon.ico",
     "/api/messages",  # Teams webhook — Bot Framework JWT, not our session/BOT_API_KEY auth
     "/dompurify.min.js", "/marked.min.js",  # static assets used by the public kb.html page
+    "/profile-wizard.js",  # Profile & Voice Guide wizard, used by the public register.html page
 })
 
 
