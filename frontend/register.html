@@ -12,6 +12,9 @@
       document.documentElement.setAttribute('data-theme', t);
     })();
   </script>
+  <script src="/marked.min.js"></script>
+  <script src="/dompurify.min.js"></script>
+  <script src="/profile-wizard.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
 
@@ -181,13 +184,11 @@
     <hr class="divider">
     <div class="section-label">Profile &amp; Voice Guide</div>
     <p style="font-size:.825rem;color:var(--muted);margin:0 0 .875rem">
-      This tells the AI how to write in your voice. Fill in the template below — the more
-      detail you add, the better the output.
+      This tells the AI how to write in your voice. Answer a few quick questions —
+      you can always refine it later from your profile page.
     </p>
-    <div class="field">
-      <label for="profile_text">Profile Guide</label>
-      <textarea id="profile_text" name="profile_text" required></textarea>
-    </div>
+    <div id="profileWizardMount"></div>
+    <input type="hidden" id="profile_text" name="profile_text">
 
     <button class="btn" type="submit" id="submitBtn">Create Account</button>
   </form>
@@ -206,51 +207,13 @@
   document.getElementById('themeIcon').textContent =
     ICONS[document.documentElement.getAttribute('data-theme')] || ICONS.light;
 
-  // Profile template
-  const TEMPLATE = `# [Your Name] — Candidate Profile & Voice Guide
-
-## Identity & Positioning
-[2-3 sentences: who you are, what you do, what makes you different from others in your field]
-
-## Contact
-- Email: [your email]
-- Location: [city, state]
-- LinkedIn: [your linkedin URL]
-
-## Voice & Tone Rules
-**DO:**
-- Write in first person, direct and conversational
-- Lead with specifics: numbers, system names, outcomes, timelines
-- Use active verbs: built, shipped, owned, designed, led, delivered
-- Echo language from the job posting where it rings true
-
-**DO NOT:**
-- "I am excited to apply for..."
-- "passion for", "leverage", "synergy", "results-driven"
-- Vague claims without specifics ("improved processes significantly")
-- Starting bullets with "Responsible for..."
-
-## Career Timeline
-| Company | Title | Dates |
-|---------|-------|-------|
-| [Most Recent] | [Title] | [Date] – Present |
-| [Previous]    | [Title] | [Date] – [Date]  |
-
-## Key Stories & Proof Points
-[Your 3–5 strongest achievements with metrics, e.g.:]
-- Built X that reduced Y by Z%
-- Led integration of A with B, cutting processing time from X to Y
-- Delivered [project] on time despite [constraint]; outcome: [result]
-
-## Skills & Technologies
-[List your key technical skills, tools, platforms]
-
-## Preferences
-- Open to: [remote/hybrid/onsite]
-- Target roles: [e.g. Solutions Engineer, Integration Engineer, TAM]
-- Not interested in: [anything to exclude]`;
-
-  document.getElementById('profile_text').value = TEMPLATE;
+  // Profile & Voice Guide — guided wizard (AI suggestions off; no resume is on
+  // the server yet to ground them until after the account exists).
+  const profileWizardCtrl = ProfileWizard.mount(document.getElementById('profileWizardMount'), {
+    aiEnabled: false,
+    embedded: true,
+    onChange: (markdown) => { document.getElementById('profile_text').value = markdown; },
+  });
 
   const dropZone  = document.getElementById('dropZone');
   const fileInput = document.getElementById('resumeFile');

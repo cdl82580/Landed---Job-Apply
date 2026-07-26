@@ -54,6 +54,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - Admin accounts restricted to the admin dashboard only
 - Per-request session validation checks `active` flag and password-change fingerprint (`pwv`)
 - **Master resume backup** — every time the master resume is overwritten (manual upload, Slack/Teams DM, or the Resume Builder wizard), the previous version is automatically kept in a single backup slot; the Profile page shows a download link and a "Restore this version" button (restoring is a symmetric swap, not a delete, so it can be undone by restoring again)
+- **Profile & Voice Guide wizard** — the profile guide (`profile.md`) is built through a 6-step guided wizard (Identity, Contact, Voice & Tone Rules, Key Stories, Preferences, Review) instead of a raw textarea, shared between `profile.html` and the registration flow (`register.html`, minus AI suggestions — no resume is on the server yet at signup). Identity and Key Stories steps have a "✨ Suggest" button that drafts from the user's actual master resume via `POST /api/profile/suggest`; Voice & Tone Rules comes prefilled with sensible defaults. An existing profile's markdown is best-effort parsed back into wizard fields on first open (anything that doesn't map to a known section, e.g. custom text or old Career Timeline/Skills sections, is preserved verbatim in an "Additional Notes" block rather than dropped). A "raw markdown" toggle on `profile.html` remains for power users; switching modes round-trips losslessly. Structured wizard answers are cached separately (`profile_fields.json`) so re-opening the wizard doesn't need to re-parse markdown — any `profile_text`-only write (raw-markdown save, or the Slack/Teams `/profile-guide` commands) clears that cache so it can't go stale.
 
 ### Security
 - `Strict-Transport-Security`, `X-Frame-Options`, `X-Content-Type-Options`, `Content-Security-Policy`, `Referrer-Policy` on every response
@@ -172,11 +173,12 @@ job-apply/
 │   ├── kb.html                ← Public Knowledge Base (searchable, category sidebar)
 │   ├── api-docs.html          ← API reference (rendered from Postman collection; ⬇ download button)
 │   ├── login.html             ← Login + Google OAuth
-│   ├── register.html
-│   ├── profile.html           ← Profile settings (Markdown editor)
+│   ├── register.html          ← Signup, incl. the Profile & Voice Guide wizard (AI suggestions off)
+│   ├── profile.html           ← Profile settings, incl. the Profile & Voice Guide wizard (+ raw markdown toggle)
+│   ├── profile-wizard.js      ← Shared step-by-step Profile & Voice Guide wizard (profile.html + register.html)
 │   ├── privacy.html           ← Privacy policy (public, unauthenticated — required by the Teams manifest's privacyUrl)
 │   ├── terms.html             ← Terms of use (public, unauthenticated — required by the Teams manifest's termsOfUseUrl)
-│   ├── marked.min.js          ← Bundled marked.js (used by profile.html)
+│   ├── marked.min.js          ← Bundled marked.js (used by profile.html, register.html, profile-wizard.js's review step)
 │   ├── libphonenumber-min.js  ← Vendored libphonenumber-js UMD bundle (Resume Builder phone formatting)
 │   └── img/                   ← logo.png + landing page assets (Slack/Teams brand icons, Unsplash photos)
 ├── routers/
@@ -211,13 +213,13 @@ job-apply/
 ## Web App Usage
 
 1. Go to https://apply.cdlav.us/ — public marketing/landing page (`frontend/index.html`); logged-in visitors are auto-redirected to `/tracking.html` (or `/admin.html`)
-2. Register (email/password or Google) and either upload `master.docx` directly or use the **Build Master Resume** wizard on the Agent tab if you don't have one yet, then paste your `profile.md`
+2. Register (email/password or Google), upload `master.docx` (or use the **Build Master Resume** wizard on the Agent tab if you don't have one yet), and answer the guided **Profile & Voice Guide** wizard
 3. **Agent tab** — paste a job posting, enter company + role, hit **Generate**; use **Application Questions** to draft answers to supplemental app questions; or use **Interview Prep** for a prep doc
 4. **Tracker tab** — track applications, add notes, link to agent runs
 5. **Calendar tab** — view and manage interview events and deadlines with Slack/email reminders
 6. **Knowledge Base** (`/kb.html`) — searchable help articles; admin-managed via the KB tab in the admin dashboard
 7. **API Reference** (`/api-docs.html`) — full endpoint browser rendered from the Postman collection, with a ⬇ download button for the collection JSON
-8. **Profile** — update display name, email, password, profile guide (Markdown editor), and resume
+8. **Profile** — update display name, email, password, profile guide (guided wizard, or raw markdown), and resume
 9. Admins are redirected to `/admin.html` automatically
 
 ### Build Master Resume
@@ -511,8 +513,9 @@ See `JobApply.postman_collection.json` for the full request/response reference.
 | POST | `/api/auth/resend-verification` | cookie | Resend verification email |
 | POST | `/api/auth/forgot-password` | — | Send password-reset link to email (always returns 200; rate-limited: 3/hr) |
 | POST | `/api/auth/reset-password` | — | Set new password using a one-time reset token (expires in 1 hour; rate-limited: 5/hr) |
-| GET | `/api/profile` | cookie | Profile + resume metadata |
-| PUT | `/api/profile` | cookie | Update display name or profile text |
+| GET | `/api/profile` | cookie | Profile + resume metadata, including `profile_fields_json` (structured Profile Wizard answers, if any) |
+| PUT | `/api/profile` | cookie | Update display name, profile text, and/or structured `profile_fields_json`. `profile_fields_json` is derived strictly from this request — a dict persists it, anything else (omitted or `null`) clears it, so raw-markdown edits (including the Slack/Teams `/profile-guide` commands, which only ever send `profile_text`) can't leave a stale wizard snapshot behind |
+| POST | `/api/profile/suggest` | cookie | AI-draft one Profile Wizard section (`section: "identity"` or `"stories"`) grounded in the user's master resume (rate-limited: 30/hr) |
 | POST | `/api/profile/resume` | cookie | Replace master resume (rate-limited: 10/hr); the previous version is automatically kept as a one-slot backup |
 | GET | `/api/profile/resume/previous` | cookie | Download the previous master resume backup (404 if none) |
 | POST | `/api/profile/resume/restore` | cookie | Swap the backup back to being the live master resume (symmetric swap, not a delete; rate-limited: 10/hr) |

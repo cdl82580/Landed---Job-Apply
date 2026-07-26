@@ -83,6 +83,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import tempfile
 import threading
 import time
@@ -139,6 +140,7 @@ try:
         WorkflowConfig,
         WorkflowError,
         WorkflowResult,
+        extract_resume_text,
         generate_app_question_answer,
         generate_interview_prep,
         optimize_run,
@@ -1711,7 +1713,11 @@ def _default_notif_prefs() -> dict:
 class ProfileUpdateRequest(BaseModel):
     display_name: str | None = None
     profile_text: str | None = None
+    profile_fields_json: dict | None = None  # structured Profile Wizard answers; see update_profile()
     notification_prefs: dict | None = None
+
+class ProfileSuggestRequest(BaseModel):
+    section: str  # "identity" | "stories"
 
 class RunRequest(BaseModel):
     job_posting: str = ""
@@ -2174,6 +2180,7 @@ async def get_profile(request: Request):
     user_data = _require_user(request)
     record = storage.get_user_by_id(user_data["user_id"]) or {}
     profile_text = storage.get_profile(user_data["user_id"]) or ""
+    profile_fields_json = storage.get_profile_fields(user_data["user_id"])
     prefs = {**_default_notif_prefs(), **record.get("notification_prefs", {})}
     return {
         "display_name":       record.get("display_name", ""),
@@ -2181,6 +2188,7 @@ async def get_profile(request: Request):
         "role":               record.get("role", "user"),
         "email_verified":     record.get("email_verified", True),
         "profile_text":       profile_text,
+        "profile_fields_json": profile_fields_json,
         "has_resume":           storage.has_resume(user_data["user_id"]),
         "resume_filename":      record.get("resume_filename"),
         "resume_uploaded_at":   record.get("resume_uploaded_at"),
@@ -2210,8 +2218,21 @@ async def update_profile(req: ProfileUpdateRequest, request: Request):
     if req.profile_text is not None:
         if len(req.profile_text) > _MAX_PROFILE_TEXT_LEN:
             raise HTTPException(400, f"Profile text must be {_MAX_PROFILE_TEXT_LEN} characters or fewer.")
+        if req.profile_fields_json is not None and len(json.dumps(req.profile_fields_json)) > _MAX_PROFILE_TEXT_LEN:
+            raise HTTPException(400, f"Profile fields must be {_MAX_PROFILE_TEXT_LEN} characters or fewer.")
+
         storage.save_profile(user_data["user_id"], req.profile_text)
         changes["profile_text"] = "updated"
+
+        # profile_fields_json is derived strictly from this request, not merged with
+        # whatever was stored before: a non-null dict persists it (the web wizard's own
+        # save), anything else (omitted or explicit null) clears it. Other profile_text
+        # writers — the Slack/Teams "/profile-guide" commands — only ever send
+        # profile_text, so without this default-to-clear behavior their edit would leave
+        # a stale wizard snapshot in place that could silently resurface (and overwrite
+        # their edit) next time the web wizard opens.
+        storage.save_profile_fields(user_data["user_id"], req.profile_fields_json)
+        changes["profile_fields_json"] = "updated" if req.profile_fields_json is not None else "cleared"
 
     if req.notification_prefs is not None:
         unknown = set(req.notification_prefs.keys()) - _NOTIF_PREF_KEYS
@@ -2287,6 +2308,111 @@ async def restore_previous_resume(request: Request):
 
     user_audit.log(user_data["user_id"], "resume_restored", user_data["email"], _client_ip(request))
     return {"ok": True}
+
+
+_PROFILE_SUGGEST_SECTIONS = {"identity", "stories"}
+
+_PROFILE_SUGGEST_SYSTEM = {
+    "identity": """\
+You are drafting one section of a job-seeker's private "Profile & Voice Guide" \
+— a reference document (not the resume or cover letter itself) that tells an AI \
+assistant how to write in this specific person's voice.
+
+Write a 3-5 sentence "Identity & Positioning" paragraph: who they are \
+professionally, what they do, and what differentiates them.
+
+Rules:
+- Use ONLY facts, numbers, employers, titles, and technologies that literally \
+appear in the resume text below. Never invent, estimate, or embellish a number, \
+employer, title, or outcome.
+- No filler phrases: never use "passion for", "results-driven", "synergy", \
+"leverage", or "I am excited to...".
+- Be specific: name real systems, technologies, or roles from the resume rather \
+than generic descriptors.
+- Return ONLY the paragraph text. No heading, no markdown, no preamble.""",
+    "stories": """\
+You are drafting one section of a job-seeker's private "Profile & Voice Guide" \
+— a reference document (not the resume or cover letter itself) that tells an AI \
+assistant how to write in this specific person's voice.
+
+Extract 3 to 5 candidate "Key Stories & Proof Points" — the strongest, most \
+specific, quantifiable achievements that actually appear in the resume text \
+below. Each is something a future resume or cover letter could cite as a proof \
+point.
+
+Rules:
+- Use ONLY facts, numbers, companies, and outcomes that literally appear in the \
+resume text. Never invent or estimate a metric.
+- Prefer stories with a concrete number (%, time saved, count of users/systems/\
+integrations, etc.) when the resume has one.
+- Each story needs a short title (the project or company name) and a one-sentence \
+description written in first person, active voice (e.g. "Built X that reduced Y \
+by Z%.").
+
+Return ONLY a JSON array, no markdown fences, no other text, in this exact shape:
+[{"title": "...", "description": "..."}]""",
+}
+
+
+def _suggest_profile_section_sync(resume_bytes: bytes, section: str) -> dict:
+    """Blocking work (pandoc + a Claude call) for a profile-wizard suggestion.
+    Run via asyncio.to_thread so it doesn't block the event loop."""
+    tmp = tempfile.NamedTemporaryFile(suffix=".docx", delete=False, dir="/tmp")
+    try:
+        tmp.write(resume_bytes)
+        tmp.close()
+        config = WorkflowConfig(progress=lambda _msg: None, master_resume=Path(tmp.name))
+        resume_text = extract_resume_text(config)
+        raw = claude(_PROFILE_SUGGEST_SYSTEM[section], resume_text, max_tokens=1024, config=config).strip()
+
+        if section == "identity":
+            return {"suggestion": raw}
+
+        cleaned = re.sub(r"^```(?:json)?\s*", "", raw)
+        cleaned = re.sub(r"\s*```$", "", cleaned.strip())
+        start, end = cleaned.find("["), cleaned.rfind("]")
+        if start != -1 and end != -1:
+            cleaned = cleaned[start:end + 1]
+        try:
+            stories = json.loads(cleaned)
+        except json.JSONDecodeError:
+            raise WorkflowError("Claude returned malformed suggestions. Please try again.")
+        if not isinstance(stories, list):
+            raise WorkflowError("Claude returned malformed suggestions. Please try again.")
+        return {"suggestions": [
+            {"title": str(s.get("title", ""))[:200], "description": str(s.get("description", ""))[:1000]}
+            for s in stories if isinstance(s, dict)
+        ][:5]}
+    finally:
+        Path(tmp.name).unlink(missing_ok=True)
+
+
+@app.post("/api/profile/suggest")
+async def suggest_profile_section(req: ProfileSuggestRequest, request: Request):
+    _check_rate_limit(request, "profile_suggest", max_hits=30, window_secs=3600)
+    user_data = _require_user(request)
+    if req.section not in _PROFILE_SUGGEST_SECTIONS:
+        raise HTTPException(400, f"Unknown section. Choose one of: {', '.join(sorted(_PROFILE_SUGGEST_SECTIONS))}")
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise HTTPException(503, "AI suggestions are not configured on this server.")
+
+    resume_bytes = storage.get_resume(user_data["user_id"])
+    if not resume_bytes:
+        raise HTTPException(400, "No master resume uploaded. Add one in your profile before requesting suggestions.")
+    if resume_bytes[:4] != b"PK\x03\x04":
+        raise HTTPException(400, "Your uploaded resume appears to be corrupted. Please re-upload your .docx file in your profile.")
+
+    try:
+        result = await asyncio.to_thread(_suggest_profile_section_sync, resume_bytes, req.section)
+    except WorkflowError as exc:
+        raise HTTPException(502, str(exc))
+    except Exception:
+        logger.exception("profile_suggest failed for section %s", req.section)
+        raise HTTPException(502, "AI suggestion failed. Please try again.")
+
+    user_audit.log(user_data["user_id"], "profile_suggest_used", user_data["email"],
+                   _client_ip(request), section=req.section)
+    return result
 
 
 @app.post("/api/profile/password")

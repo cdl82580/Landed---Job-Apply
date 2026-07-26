@@ -7,6 +7,7 @@
   <link rel="icon" href="/favicon.png" type="image/png">
   <script src="/marked.min.js"></script>
   <script src="/dompurify.min.js"></script>
+  <script src="/profile-wizard.js"></script>
   <script>
     (function(){
       var t = localStorage.getItem('theme') ||
@@ -473,36 +474,48 @@
       <button class="edit-toggle-btn" id="profileEditBtn">&#x270E; Edit</button>
     </div>
     <p style="font-size:.825rem;color:var(--muted);margin:0 0 .875rem">
-      This tells the AI how to write in your voice. Markdown is supported.
+      This tells the AI how to write in your voice. A guided wizard walks you through it section
+      by section, or you can drop into raw markdown.
     </p>
     <form id="profileForm">
       <!-- Markdown preview (view mode) -->
       <div class="markdown-preview" id="profilePreview"></div>
 
-      <!-- Markdown toolbar (edit mode only) -->
-      <div class="md-toolbar hidden" id="mdToolbar">
-        <button type="button" class="md-btn" data-md="bold"   title="Bold">B</button>
-        <button type="button" class="md-btn" data-md="italic" title="Italic"><em>I</em></button>
-        <div class="md-sep"></div>
-        <button type="button" class="md-btn" data-md="h2"     title="Heading 2">H2</button>
-        <button type="button" class="md-btn" data-md="h3"     title="Heading 3">H3</button>
-        <div class="md-sep"></div>
-        <button type="button" class="md-btn" data-md="ul"     title="Bullet list">• List</button>
-        <button type="button" class="md-btn" data-md="ol"     title="Numbered list">1. List</button>
-        <div class="md-sep"></div>
-        <button type="button" class="md-btn" data-md="code"      title="Inline code">&lt;/&gt;</button>
-        <button type="button" class="md-btn" data-md="underline" title="Underline">U̲</button>
-        <button type="button" class="md-btn" data-md="link"      title="Hyperlink">🔗</button>
-        <button type="button" class="md-btn" data-md="hr"        title="Divider">—</button>
+      <!-- Guided wizard (edit mode, default) -->
+      <div class="hidden" id="profileWizardWrap">
+        <div id="profileWizardMount"></div>
+        <p style="margin:.75rem 0 0">
+          <a href="#" id="toRawModeLink" style="font-size:.8rem">Prefer to edit as raw markdown instead? &rarr;</a>
+        </p>
       </div>
 
-      <!-- Textarea (edit mode only) -->
-      <textarea id="profile_text" name="profile_text" data-field class="hidden"
-                style="min-height:280px;border-radius:0 0 6px 6px"></textarea>
+      <!-- Raw markdown editor (edit mode, opt-in) -->
+      <div class="hidden" id="profileRawWrap">
+        <div class="md-toolbar" id="mdToolbar">
+          <button type="button" class="md-btn" data-md="bold"   title="Bold">B</button>
+          <button type="button" class="md-btn" data-md="italic" title="Italic"><em>I</em></button>
+          <div class="md-sep"></div>
+          <button type="button" class="md-btn" data-md="h2"     title="Heading 2">H2</button>
+          <button type="button" class="md-btn" data-md="h3"     title="Heading 3">H3</button>
+          <div class="md-sep"></div>
+          <button type="button" class="md-btn" data-md="ul"     title="Bullet list">• List</button>
+          <button type="button" class="md-btn" data-md="ol"     title="Numbered list">1. List</button>
+          <div class="md-sep"></div>
+          <button type="button" class="md-btn" data-md="code"      title="Inline code">&lt;/&gt;</button>
+          <button type="button" class="md-btn" data-md="underline" title="Underline">U̲</button>
+          <button type="button" class="md-btn" data-md="link"      title="Hyperlink">🔗</button>
+          <button type="button" class="md-btn" data-md="hr"        title="Divider">—</button>
+        </div>
+        <textarea id="profile_text" name="profile_text" data-field
+                  style="min-height:280px;border-radius:0 0 6px 6px"></textarea>
+        <p style="margin:.75rem 0 0">
+          <a href="#" id="toWizardModeLink" style="font-size:.8rem">&larr; Back to guided wizard</a>
+        </p>
+      </div>
 
-      <div class="btn-row" style="margin-top:.875rem">
-        <button class="btn hidden" type="submit" id="profileBtn">Save</button>
-        <button class="btn btn-ghost hidden" type="button" id="profileCancelBtn">Cancel</button>
+      <div class="btn-row hidden" id="profileBtnRow" style="margin-top:.875rem">
+        <button class="btn" type="submit" id="profileBtn">Save</button>
+        <button class="btn btn-ghost" type="button" id="profileCancelBtn">Cancel</button>
       </div>
       <div class="toast" id="profileToast"></div>
     </form>
@@ -628,6 +641,8 @@
     ICONS[document.documentElement.getAttribute('data-theme')] || ICONS.light;
 
   let _loggingOut = false;
+  let _currentEmail = '';
+  let _currentProfileFields = null;
   async function apiFetch(url, opts = {}) {
     const res = await fetch(url, opts);
     if (res.status === 401) {
@@ -646,6 +661,11 @@
   // Init marked before any async calls that use it
   if (typeof marked !== 'undefined') marked.use({ breaks: true, gfm: true });
 
+  let _profileWizardCtrl = null;
+  function destroyWizard() {
+    if (_profileWizardCtrl) { _profileWizardCtrl.destroy(); _profileWizardCtrl = null; }
+  }
+
   function renderPreview(text) {
     const preview = document.getElementById('profilePreview');
     if (typeof marked !== 'undefined') {
@@ -655,14 +675,30 @@
       preview.textContent = text || '';
     }
     preview.classList.remove('hidden');
-    document.getElementById('profile_text').classList.add('hidden');
-    document.getElementById('mdToolbar').classList.add('hidden');
+    document.getElementById('profileWizardWrap').classList.add('hidden');
+    document.getElementById('profileRawWrap').classList.add('hidden');
+    document.getElementById('profileBtnRow').classList.add('hidden');
+    destroyWizard();
   }
 
-  function showEditor() {
+  function showWizardMode(initialFields) {
     document.getElementById('profilePreview').classList.add('hidden');
-    document.getElementById('profile_text').classList.remove('hidden');
-    document.getElementById('mdToolbar').classList.remove('hidden');
+    document.getElementById('profileRawWrap').classList.add('hidden');
+    document.getElementById('profileWizardWrap').classList.remove('hidden');
+    document.getElementById('profileBtnRow').classList.remove('hidden');
+    destroyWizard();
+    _profileWizardCtrl = ProfileWizard.mount(document.getElementById('profileWizardMount'), {
+      fields: initialFields, aiEnabled: true, embedded: true,
+      fetchFn: apiFetch, email: _currentEmail,
+    });
+  }
+
+  function showRawMode() {
+    document.getElementById('profilePreview').classList.add('hidden');
+    document.getElementById('profileWizardWrap').classList.add('hidden');
+    document.getElementById('profileRawWrap').classList.remove('hidden');
+    document.getElementById('profileBtnRow').classList.remove('hidden');
+    destroyWizard();
   }
 
   async function doLogout() {
@@ -693,6 +729,8 @@
     }
     document.getElementById('display_name').value  = d.display_name ?? '';
     document.getElementById('profile_text').value  = d.profile_text ?? '';
+    _currentEmail = d.email ?? '';
+    _currentProfileFields = d.profile_fields_json ?? null;
     renderPreview(d.profile_text ?? '');
 
     // Notification prefs
@@ -894,35 +932,57 @@
   });
 
   // Profile card
-  let _origProfile = '';
+  let _origProfileText = '';
   document.getElementById('profileEditBtn').addEventListener('click', () => {
-    _origProfile = document.getElementById('profile_text').value;
-    enterEdit('profileCard', 'profileEditBtn', 'profileBtn', 'profileCancelBtn');
-    showEditor();
-    document.getElementById('profile_text').focus();
+    _origProfileText = document.getElementById('profile_text').value;
+    document.getElementById('profileCard').classList.remove('view-mode');
+    document.getElementById('profileEditBtn').classList.add('hidden');
+    showWizardMode(_currentProfileFields || ProfileWizard.markdownToFields(_origProfileText));
   });
   document.getElementById('profileCancelBtn').addEventListener('click', () => {
-    const ta = document.getElementById('profile_text');
-    ta.value = _origProfile;
-    exitEdit('profileCard', 'profileEditBtn', 'profileBtn', 'profileCancelBtn');
-    renderPreview(_origProfile);
+    document.getElementById('profile_text').value = _origProfileText;
+    document.getElementById('profileCard').classList.add('view-mode');
+    document.getElementById('profileEditBtn').classList.remove('hidden');
+    renderPreview(_origProfileText);
+  });
+
+  document.getElementById('toRawModeLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    const md = _profileWizardCtrl ? _profileWizardCtrl.getMarkdown() : document.getElementById('profile_text').value;
+    document.getElementById('profile_text').value = md;
+    showRawMode();
+  });
+  document.getElementById('toWizardModeLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    showWizardMode(ProfileWizard.markdownToFields(document.getElementById('profile_text').value));
   });
 
   document.getElementById('profileForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('profileBtn');
     btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Saving…';
+
+    const usingWizard = !document.getElementById('profileWizardWrap').classList.contains('hidden');
+    const markdown = usingWizard && _profileWizardCtrl
+      ? _profileWizardCtrl.getMarkdown()
+      : document.getElementById('profile_text').value;
+    // Raw-mode saves send profile_fields_json:null so stale structured answers
+    // can't silently overwrite a manual edit next time the wizard opens.
+    const fieldsPayload = usingWizard && _profileWizardCtrl ? _profileWizardCtrl.getFields() : null;
+
     const res  = await apiFetch('/api/profile', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile_text: document.getElementById('profile_text').value }),
+      body: JSON.stringify({ profile_text: markdown, profile_fields_json: fieldsPayload }),
     });
     const body = await res.json();
     toast('profileToast', res.ok ? '✓ Profile saved.' : (body.detail ?? 'Error'), res.ok ? 'ok' : 'err');
     btn.disabled = false; btn.textContent = 'Save';
     if (res.ok) {
-      const saved = document.getElementById('profile_text').value;
-      exitEdit('profileCard', 'profileEditBtn', 'profileBtn', 'profileCancelBtn');
-      renderPreview(saved);
+      document.getElementById('profile_text').value = markdown;
+      _currentProfileFields = fieldsPayload;
+      document.getElementById('profileCard').classList.add('view-mode');
+      document.getElementById('profileEditBtn').classList.remove('hidden');
+      renderPreview(markdown);
     }
   });
 

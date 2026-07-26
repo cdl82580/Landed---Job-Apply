@@ -288,7 +288,7 @@
           "request": {
             "method": "GET",
             "url": "{{base_url}}/api/profile",
-            "description": "Returns: `display_name`, `email`, `role`, `email_verified`, `profile_text`, `has_resume`, `resume_filename`, `resume_uploaded_at`, `has_previous_resume`, `resume_previous_saved_at`."
+            "description": "Returns: `display_name`, `email`, `role`, `email_verified`, `profile_text`, `profile_fields_json` (structured Profile Wizard answers, or `null` if the profile was last saved as raw markdown), `has_resume`, `resume_filename`, `resume_uploaded_at`, `has_previous_resume`, `resume_previous_saved_at`."
           }
         },
         {
@@ -296,7 +296,7 @@
           "request": {
             "method": "PUT",
             "url": "{{base_url}}/api/profile",
-            "description": "Update display name and/or profile guide text. Both optional. Max display_name: 100 chars; max profile_text: 50,000 chars.",
+            "description": "Update display name, profile guide text, and/or structured `profile_fields_json`. All optional. Max display_name: 100 chars; max profile_text: 50,000 chars; max profile_fields_json (serialized): 50,000 chars. `profile_fields_json` is derived strictly from this request — a dict persists the Profile Wizard's structured answers, anything else (omitted or `null`) clears them. Raw-markdown saves (including the Slack/Teams `/profile-guide` commands, which only ever send `profile_text`) should omit it or send `null` so a stale wizard snapshot can't resurface next time the wizard opens.",
             "header": [
               {
                 "key": "Content-Type",
@@ -305,7 +305,25 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"display_name\": \"Corey L.\",\n  \"profile_text\": \"Updated guide…\"\n}"
+              "raw": "{\n  \"display_name\": \"Corey L.\",\n  \"profile_text\": \"Updated guide…\",\n  \"profile_fields_json\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "POST /api/profile/suggest",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/profile/suggest",
+            "description": "AI-draft one Profile & Voice Guide Wizard section, grounded in the user's master resume (never invents facts/numbers not in the resume). `section` is `\"identity\"` (returns `{\"suggestion\": \"...\"}` — a 3-5 sentence draft) or `\"stories\"` (returns `{\"suggestions\": [{\"title\": \"...\", \"description\": \"...\"}]}` — 3-5 candidate proof points). 400 if no master resume is on file. 503 if AI is not configured on the server. Rate-limited: 30/hr per IP.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"section\": \"identity\"\n}"
             }
           }
         },

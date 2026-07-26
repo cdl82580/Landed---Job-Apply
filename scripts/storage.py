@@ -5,7 +5,8 @@ Key layout:
   users/{sha256(email)}.json          — account record
   user_ids/{user_id}.txt              — reverse lookup: user_id → email
   resumes/{user_id}/master.docx       — uploaded master resume
-  profiles/{user_id}/profile.md       — voice / profile guide
+  profiles/{user_id}/profile.md       — voice / profile guide (rendered markdown, fed to AI prompts)
+  profiles/{user_id}/profile_fields.json — structured Profile Wizard answers (re-populates the wizard)
 """
 
 from __future__ import annotations
@@ -250,3 +251,20 @@ def save_profile(user_id: str, text: str) -> None:
 
 def get_profile(user_id: str) -> str | None:
     return get_text(f"profiles/{user_id}/profile.md")
+
+
+def save_profile_fields(user_id: str, fields: dict[str, Any] | None) -> None:
+    """Persist the structured Profile Wizard answers (profiles/{user_id}/profile_fields.json).
+    The rendered markdown in profile.md (get_profile()) remains the source of truth fed to
+    resume/cover-letter prompts; this is only for re-populating the wizard on
+    next edit. Pass None to clear it (e.g. after a raw-markdown edit makes it stale)."""
+    key = f"profiles/{user_id}/profile_fields.json"
+    if fields is None:
+        delete_bytes(key)
+    else:
+        put_text(key, json.dumps(fields))
+
+
+def get_profile_fields(user_id: str) -> dict[str, Any] | None:
+    data = get_text(f"profiles/{user_id}/profile_fields.json")
+    return json.loads(data) if data else None
