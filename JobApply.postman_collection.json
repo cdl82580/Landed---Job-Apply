@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Job Apply API",
-    "description": "Complete API reference for the Job Application Agent (https://apply.cdlav.us/).\n\n**Auth model:** stateless HMAC-signed `HttpOnly` session cookie (`session`, 30-day TTL). Login/register set the cookie automatically. All protected requests include it. Admins also accepted via `Authorization: Bearer {BOT_API_KEY}` header.\n\n**Run lifecycle (application & prep):**\n1. POST to start → returns `run_id` / `prep_id`\n2. GET `…/stream` → SSE; events: `progress` (log line), `done` (files + folder_url + optional replacements_warning), `error`\n3. `done` event contains `files` with filenames\n4. GET `…/files/{name}` → download DOCX\n\n**Rate limits (per IP, sliding window):**\n- Login: 10/min\n- Register: 5/hr\n- Resend-verification: 3/hr\n- Change password: 5/hr\n- Change email: 5/hr\n- Resume upload: 10/hr\n- Forgot password: 3/hr\n- Reset password: 5/hr\n- Company search: 30/min\n- Location/institution search: 30/min\n- Restore previous resume: 10/hr\n\n**Security headers on every response:** HSTS (2-year), X-Frame-Options: DENY, X-Content-Type-Options: nosniff, CSP, Referrer-Policy.\n\n**Base URL:** `{{base_url}}` defaults to `https://apply.cdlav.us`. Override with `http://localhost:8000` for local dev.",
+    "name": "Landed API",
+    "description": "Complete API reference for Landed (https://apply.cdlav.us/).\n\n**Auth model:** stateless HMAC-signed `HttpOnly` session cookie (`session`, 30-day TTL). Login/register set the cookie automatically. All protected requests include it. Admins also accepted via `Authorization: Bearer {BOT_API_KEY}` header.\n\n**Run lifecycle (application & prep):**\n1. POST to start → returns `run_id` / `prep_id`\n2. GET `…/stream` → SSE; events: `progress` (log line), `done` (files + folder_url + optional replacements_warning), `error`\n3. `done` event contains `files` with filenames\n4. GET `…/files/{name}` → download DOCX\n\n**Rate limits (per IP, sliding window):**\n- Login: 10/min\n- Register: 5/hr\n- Resend-verification: 3/hr\n- Change password: 5/hr\n- Change email: 5/hr\n- Resume upload: 10/hr\n- Forgot password: 3/hr\n- Reset password: 5/hr\n- Company search: 30/min\n- Location/institution search: 30/min\n- Restore previous resume: 10/hr\n\n**Security headers on every response:** HSTS (2-year), X-Frame-Options: DENY, X-Content-Type-Options: nosniff, CSP, Referrer-Policy.\n\n**Base URL:** `{{base_url}}` defaults to `https://apply.cdlav.us`. Override with `http://localhost:8000` for local dev.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -1894,14 +1894,14 @@
     },
     {
       "name": "Teams Bot",
-      "description": "Bot-key-authenticated endpoints the Teams bot calls on itself to link a Teams (Azure AD) identity to a Job Apply account. Not for end-user use — see README.md 'Teams Commands' for the confirm/whoami/unlink chat flow.",
+      "description": "Bot-key-authenticated endpoints the Teams bot calls on itself to link a Teams (Azure AD) identity to a Landed account. Not for end-user use — see README.md 'Teams Commands' for the confirm/whoami/unlink chat flow.",
       "item": [
         {
           "name": "POST /api/teams/link-status",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/api/teams/link-status",
-            "description": "Has this Teams identity (aad_object_id) been linked to a Job Apply account? Returns {linked:false} or {linked:true, email, expires_at}.",
+            "description": "Has this Teams identity (aad_object_id) been linked to a Landed account? Returns {linked:false} or {linked:true, email, expires_at}.",
             "header": [
               {
                 "key": "Content-Type",
@@ -1923,7 +1923,7 @@
           "request": {
             "method": "POST",
             "url": "{{base_url}}/api/teams/account-lookup",
-            "description": "Does a Job Apply account exist for this email? Returns {exists: bool}.",
+            "description": "Does a Landed account exist for this email? Returns {exists: bool}.",
             "header": [
               {
                 "key": "Content-Type",
@@ -1945,7 +1945,7 @@
           "request": {
             "method": "POST",
             "url": "{{base_url}}/api/teams/link-confirm",
-            "description": "Link a Teams identity to the Job Apply account for this email (30-day expiry). 404 if no account exists for that email.",
+            "description": "Link a Teams identity to the Landed account for this email (30-day expiry). 404 if no account exists for that email.",
             "header": [
               {
                 "key": "Content-Type",
@@ -1967,7 +1967,7 @@
           "request": {
             "method": "POST",
             "url": "{{base_url}}/api/teams/link-token",
-            "description": "Issue a short-lived token for the web login-linking flow (frontend/teams-link.html). Used when the caller's Teams email has no matching Job Apply account, so they can sign in (password or Google) to link an existing account under a different email. Returns {token}.",
+            "description": "Issue a short-lived token for the web login-linking flow (frontend/teams-link.html). Used when the caller's Teams email has no matching Landed account, so they can sign in (password or Google) to link an existing account under a different email. Returns {token}.",
             "header": [
               {
                 "key": "Content-Type",

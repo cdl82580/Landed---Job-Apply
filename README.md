@@ -1,4 +1,4 @@
-# job-apply — Job Apply Agents
+# job-apply — Landed
 
 A Claude-powered web app (and Slack bot) that takes a job posting and produces a
 tailored resume, ATS resume, cover letter, and interview prep doc in under 2 minutes.
@@ -108,7 +108,7 @@ See [Slack Commands](#slack-commands) section below.
 ### Teams Bot
 See [Teams Commands](#teams-commands) section below. Unlike the Slack bot (which
 always acts as the single primary account), the Teams bot resolves *which*
-Job Apply account it's acting on behalf of per Teams user — see that section
+Landed account it's acting on behalf of per Teams user — see that section
 for the identity-linking flow. `frontend/privacy.html` and `frontend/terms.html`
 are served unauthenticated at `/privacy` and `/terms` — Teams' permission-consent
 dialog fetches the manifest's `privacyUrl`/`termsOfUseUrl` directly and gets stuck
@@ -308,7 +308,7 @@ The bot also publishes a dynamic **App Home tab** showing live pipeline stats, u
 | 👤 Profile | `profile resume` | Instructions for uploading a new master resume (attach a `.docx` directly to the chat) |
 | 👤 Profile | `profile guide` | Edit your profile & voice guide |
 | 👤 Profile | `notifications` | View and toggle email notification preferences |
-| 🔑 Account | `confirm` | Link your Teams identity to a Job Apply account |
+| 🔑 Account | `confirm` | Link your Teams identity to a Landed account |
 | 🔑 Account | `whoami` | Show which account you're linked as |
 | 🔑 Account | `unlink` | Remove your Teams identity's link |
 | 🛠️ System | `runs` | List recent Drive run folders |
@@ -318,7 +318,7 @@ The bot also publishes a dynamic **App Home tab** showing live pipeline stats, u
 time a Teams user runs any command other than `help`/`confirm`/`unlink`, the bot
 looks up a `teams_links/{aad_object_id}.json` record in Tigris (`scripts/teams_links.py`).
 If missing or expired, it fetches the caller's email via the Bot Framework's
-`TeamsInfo.get_member()` roster API, checks whether a Job Apply account exists for
+`TeamsInfo.get_member()` roster API, checks whether a Landed account exists for
 that email, and — if so — asks the user to reply `confirm`. Only after that explicit
 confirmation does it persist the link (30-day expiry, then re-confirmation is
 required). Every subsequent API call the bot makes on that user's behalf carries an
@@ -461,7 +461,7 @@ Both process groups share the same Docker image and all Fly secrets.
 | `AWS_ENDPOINT_URL_S3` | `https://fly.storage.tigris.dev` |
 | `BUCKET_NAME` | Tigris bucket name |
 | `RESEND_API_KEY` | Resend — email verification, password-change, and calendar reminder emails |
-| `RESEND_FROM` | Sender address (default: `Job Apply <hello@cdlav.us>`) |
+| `RESEND_FROM` | Sender address (default: `Landed <hello@cdlav.us>`) |
 | `APP_URL` | Public app URL (default: `https://apply.cdlav.us`) |
 | `APP_USER_EMAIL` | Primary user email — used by the Slack bot (always) and Teams bot (fallback, before/without a per-user link) to resolve API identity |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID |
@@ -572,8 +572,8 @@ See `JobApply.postman_collection.json` for the full request/response reference.
 | POST | `/api/jd/format` | cookie | AI-format a raw job description (returns cleaned Markdown) |
 | GET | `/api/postman` | — | Download the Postman collection JSON |
 | POST | `/api/messages` | Bot Framework JWT | Microsoft Teams Bot Framework webhook (Azure Bot → here) |
-| POST | `/api/teams/link-status` | bot key | Has this Teams identity (`aad_object_id`) been linked to a Job Apply account? |
-| POST | `/api/teams/account-lookup` | bot key | Does a Job Apply account exist for this email? |
+| POST | `/api/teams/link-status` | bot key | Has this Teams identity (`aad_object_id`) been linked to a Landed account? |
+| POST | `/api/teams/account-lookup` | bot key | Does a Landed account exist for this email? |
 | POST | `/api/teams/link-confirm` | bot key | Link a Teams identity to the account for this email (404 if no such account) |
 | POST | `/api/teams/link-token` | bot key | Issue a short-lived token for `/teams-link.html` — lets a user with no account under their Teams email sign in (password or Google) to link an existing account under a different one |
 | POST | `/api/teams/link-claim` | cookie | Claim a `link-token` for whichever account the caller is currently signed in as (called by `/teams-link.html` after login) |

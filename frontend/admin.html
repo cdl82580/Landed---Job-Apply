@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin - Job Apply</title>
+  <title>Admin - Landed</title>
   <!-- ExcelJS loaded lazily on first Excel export -->
   <script id="exceljs-placeholder" data-src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
   <!-- Quill WYSIWYG editor (KB article body) -->
@@ -2963,7 +2963,7 @@ function downloadCSV(filename, headers, rows) {
 async function downloadXLSX(filename, sheetTitle, description, headers, rows) {
   await loadExcelJS();
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Job Apply Admin';
+  wb.creator = 'Landed Admin';
   wb.created = new Date();
   const ws = wb.addWorksheet(sheetTitle, { views: [{ state: 'frozen', ySplit: 4, xSplit: 1 }] });
 

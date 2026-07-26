@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KB - Job Apply</title>
+  <title>KB - Landed</title>
   <link rel="icon" href="/favicon.png" type="image/png">
   <script src="/dompurify.min.js"></script>
   <script>
@@ -422,7 +422,7 @@ const KB = {
       readTime: '3 min',
       body: `
 <h2>Six Agents, One Job Search</h2>
-<p>Everything in Job Apply that calls Claude to produce something is one of six agents. Each needs a job description resolvable from a tracked application (a saved <code>job_description.md</code> in its Drive folder, or its posting URL) — except the first <strong>Resume + ATS + Cover Letter</strong> run for an application, which also accepts a pasted job posting directly.</p>
+<p>Everything in Landed that calls Claude to produce something is one of six agents. Each needs a job description resolvable from a tracked application (a saved <code>job_description.md</code> in its Drive folder, or its posting URL) — except the first <strong>Resume + ATS + Cover Letter</strong> run for an application, which also accepts a pasted job posting directly.</p>
 
 <table>
   <tr><th>Agent</th><th>What it produces</th><th>Web (Agent tab)</th><th>Slack</th><th>Teams</th></tr>
@@ -453,7 +453,7 @@ const KB = {
       readTime: '3 min',
       body: `
 <h2>What the Agent Does</h2>
-<p>The Job Apply Agent takes a job posting and produces three documents — all tailored to that specific role:</p>
+<p>The Landed Agent takes a job posting and produces three documents — all tailored to that specific role:</p>
 <ul>
   <li><strong>Tailored Resume</strong> (<code>.docx</code>) — styled, two-column, branded format built on your master resume</li>
   <li><strong>ATS Resume</strong> (<code>.docx</code>) — single-column, plain-text-friendly version for applicant tracking systems</li>
@@ -736,7 +736,7 @@ const KB = {
 <h2>Competencies to Emphasize</h2>
 <p>Lead with: <em>LLM System Design, RAG Architecture, Agentic Workflow Engineering, AI Evaluation, Production ML Systems</em></p>
 
-<h2>The Job Apply Agent as an Example</h2>
+<h2>The Landed Agent as an Example</h2>
 <p>This project itself is an agentic system — multi-step prompting, structured output, document generation, Drive integration, and a full CI test suite. It's a first-class example for AI roles: built, owned, runs in production.</p>
 
 <h2>Cover Letter Hook</h2>
@@ -1519,7 +1519,7 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
 <p>The Slack bot (<code>slack_bot.py</code>) is a full Slack app that runs as a separate Fly.io machine (the "bot" machine). It exposes every major workflow via slash commands — running jobs, tracking applications, managing the calendar, and updating your profile — all from Slack.</p>
 
 <h2>Architecture</h2>
-<p>The bot is a Slack Bolt app that talks to the Job Apply API over HTTP using a shared <code>BOT_API_KEY</code>. It runs on port 3000 and handles:</p>
+<p>The bot is a Slack Bolt app that talks to the Landed API over HTTP using a shared <code>BOT_API_KEY</code>. It runs on port 3000 and handles:</p>
 <ul>
   <li>Slash command payloads from Slack</li>
   <li>Interactive component submissions (modals, selects)</li>
@@ -1702,10 +1702,10 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
 <p>Unlike the Slack bot, the Teams bot is <strong>mounted directly onto the main FastAPI app</strong> (the <code>web</code> Fly machine) via <code>routers/teams.py</code>, which exposes <code>POST /api/messages</code> as a normal FastAPI route. It is not a separate Fly machine — it rides on the app's existing domain and TLS cert.</p>
 
 <h2>Identity Linking</h2>
-<p>The Slack bot always acts as the single primary account. The Teams bot instead resolves <em>which</em> Job Apply account each Teams user is acting on behalf of:</p>
+<p>The Slack bot always acts as the single primary account. The Teams bot instead resolves <em>which</em> Landed account each Teams user is acting on behalf of:</p>
 <ul>
   <li>The first time you run any command other than <code>help</code>/<code>confirm</code>/<code>unlink</code>, the bot looks up your Teams identity against a linked account</li>
-  <li>If unlinked, it checks whether a Job Apply account exists for your Teams email and asks you to reply <code>confirm</code></li>
+  <li>If unlinked, it checks whether a Landed account exists for your Teams email and asks you to reply <code>confirm</code></li>
   <li>Once confirmed, the link is valid for 30 days, after which re-confirmation is required</li>
   <li><code>whoami</code> shows which account you're currently linked as; <code>unlink</code> removes the link</li>
 </ul>
@@ -1810,10 +1810,10 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
       readTime: '3 min',
       body: `
 <h2>confirm</h2>
-<p>Links your Teams identity to a Job Apply account with a matching email. Required before any other command works.</p>
+<p>Links your Teams identity to a Landed account with a matching email. Required before any other command works.</p>
 
 <h2>whoami</h2>
-<p>Shows which Job Apply account your Teams identity is currently linked as.</p>
+<p>Shows which Landed account your Teams identity is currently linked as.</p>
 
 <h2>unlink</h2>
 <p>Removes your Teams identity's link — you'll need to <code>confirm</code> again before running other commands.</p>
