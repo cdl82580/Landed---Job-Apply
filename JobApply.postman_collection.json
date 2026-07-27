@@ -1711,6 +1711,27 @@
       ]
     },
     {
+      "name": "Admin — Chat Logs",
+      "item": [
+        {
+          "name": "GET /api/admin/chat-logs",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/chat-logs",
+            "description": "All KB support-chatbot conversations across all users, newest first. Each index entry includes id, user_id, user_email, user_role, started_at, updated_at, message_count, escalation_count, escalation_reasons, and last_message_preview."
+          }
+        },
+        {
+          "name": "GET /api/admin/chat-logs/{user_id}/{conversation_id}",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/chat-logs/{{user_id}}/{{conversation_id}}",
+            "description": "Full transcript for one conversation: the messages array (role, text, at, attachments) and the escalations array (reason, summary, at, email_subject, sent_ok) alongside the summary fields from the index."
+          }
+        }
+      ]
+    },
+    {
       "name": "Knowledge Base",
       "description": "Public (authenticated) endpoints for browsing KB articles and categories. The KB is stored as a single JSON blob in Tigris (`kb/data.json`). Seed data is auto-applied when no KB has been saved yet.",
       "item": [

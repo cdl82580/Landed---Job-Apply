@@ -27,7 +27,7 @@
       --card-border: #E5E7EB; --input-bg: #FFFFFF; --input-border: #D1D5DB;
     }
     [data-theme="dark"] { color-scheme: dark;
-      --primary: #A5B4FC; --border: #6366F1; --fill: #1A1A2E;
+      --primary: #52A6FF; --border: #52A6FF; --fill: #1A1A2E;
       --text: #F0F0F5; --muted: #94A3B8; --error: #F87171; --success: #4ADE80;
       --bg-page: #0A0A0A; --bg-card: #111111; --card-border: #1E1E1E;
       --input-bg: #161616; --input-border: #2B2B2B;
@@ -423,6 +423,15 @@
     .run-detail-section { margin-top: 1.25rem; }
     .run-detail-section:first-child { margin-top: 0; }
 
+    /* Chat log transcript */
+    .chatlog-transcript { display: flex; flex-direction: column; gap: .6rem; }
+    .chatlog-msg { border-radius: 8px; padding: .6rem .75rem; font-size: .85rem; }
+    .chatlog-msg.chatlog-user { background: var(--fill); }
+    .chatlog-msg.chatlog-assistant { background: var(--bg-page, transparent); border: 1px solid var(--card-border); }
+    .chatlog-msg-meta { font-size: .7rem; color: var(--muted); margin-bottom: .3rem; }
+    .chatlog-msg-text { white-space: pre-wrap; word-break: break-word; }
+    .chatlog-attach { font-size: .75rem; color: var(--muted); margin-top: .35rem; }
+
     /* Comments */
     .comment { background: var(--bg-page); border: 1px solid var(--card-border);
                border-radius: 6px; padding: .75rem; margin-bottom: .5rem; }
@@ -540,6 +549,7 @@
     <button class="tab" data-tab="auditlog">Event Logs</button>
     <button class="tab" data-tab="webhooks">Webhooks</button>
     <button class="tab" data-tab="kb">Knowledge Base</button>
+    <button class="tab" data-tab="chatlogs">Chat Logs</button>
   </div>
 
   <!-- ── Users tab ──────────────────────────────────────────────── -->
@@ -1003,6 +1013,30 @@
     </div>
   </div>
 
+  <!-- ── Chat Logs tab ─────────────────────────────────────────── -->
+  <div class="tab-pane" id="tab-chatlogs">
+    <div class="filter-row" style="margin-bottom:.75rem">
+      <input type="text" id="chatLogSearch" placeholder="Search by user email or message text…" style="flex:1;min-width:0">
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--muted);white-space:nowrap;margin:0">
+        <input type="checkbox" id="chatLogEscalatedOnly"> Escalated only
+      </label>
+    </div>
+    <div style="font-size:.8rem;color:var(--muted);margin-bottom:.5rem" id="chatLogCount"></div>
+    <div class="table-wrap admin-table-section">
+    <table>
+      <thead><tr>
+        <th>User</th>
+        <th>Started</th>
+        <th>Last activity</th>
+        <th>Messages</th>
+        <th>Escalated</th>
+        <th style="width:32%">Last message</th>
+      </tr></thead>
+      <tbody id="chatLogBody"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+    </table>
+    </div>
+  </div>
+
 </div><!-- /container -->
 
 <!-- ── Edit drawer ───────────────────────────────────────────── -->
@@ -1106,6 +1140,23 @@
   <div class="drawer-body" id="runDrawerBody"></div>
   <div class="drawer-footer">
     <button class="btn btn-ghost" id="runDrawerCloseBtn">Close</button>
+  </div>
+</div>
+
+<!-- ── Chat log detail drawer ────────────────────────────────── -->
+<div class="overlay" id="chatLogDrawerOverlay"></div>
+<div class="drawer" id="chatLogDrawer" style="width:560px">
+  <div class="drawer-header">
+    <div class="drawer-title-row">
+      <div class="drawer-title">Conversation</div>
+      <span class="drawer-mode-badge" id="chatLogDrawerBadge"></span>
+    </div>
+    <button class="drawer-close" id="chatLogDrawerClose">&#x2715;</button>
+  </div>
+  <div class="drawer-body" id="chatLogDrawerBody"></div>
+  <div class="drawer-footer">
+    <a class="btn hidden" id="chatLogReplyBtn" target="_blank" rel="noopener" style="text-decoration:none">Reply to user ↗</a>
+    <button class="btn btn-ghost" id="chatLogDrawerCloseBtn">Close</button>
   </div>
 </div>
 
@@ -1416,7 +1467,7 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 });
 
 // ── Tabs ────────────────────────────────────────────────────────────
-const VALID_TABS = ['users','applications','runs','auditlog','webhooks','kb'];
+const VALID_TABS = ['users','applications','runs','auditlog','webhooks','kb','chatlogs'];
 
 function activateTab(name) {
   const tabName = VALID_TABS.includes(name) ? name : 'users';
@@ -4072,6 +4123,134 @@ document.getElementById('kbClearFilters').addEventListener('click', () => {
 // Lazy-load KB tab
 document.querySelector('[data-tab="kb"]').addEventListener('click', () => {
   if (!_kbLoaded) { _kbLoaded = true; loadKB(); }
+});
+
+// ── Chat Logs ────────────────────────────────────────────────────────
+let _chatLogsLoaded = false;
+let _chatLogs = [];
+
+async function loadChatLogs() {
+  const res = await apiFetch('/api/admin/chat-logs');
+  _chatLogs = res.ok ? await res.json() : [];
+  renderChatLogs();
+}
+
+function renderChatLogs() {
+  const q = document.getElementById('chatLogSearch').value.trim().toLowerCase();
+  const escalatedOnly = document.getElementById('chatLogEscalatedOnly').checked;
+  let rows = _chatLogs;
+  if (escalatedOnly) rows = rows.filter(c => (c.escalation_count || 0) > 0);
+  if (q) {
+    rows = rows.filter(c =>
+      (c.user_email || '').toLowerCase().includes(q) ||
+      (c.last_message_preview || '').toLowerCase().includes(q)
+    );
+  }
+  document.getElementById('chatLogCount').textContent =
+    `${rows.length} conversation${rows.length === 1 ? '' : 's'}`;
+
+  const tbody = document.getElementById('chatLogBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No conversations found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(c => {
+    const reasons = c.escalation_reasons || [];
+    const escBadge = reasons.length
+      ? reasons.map(r => `<span class="badge" style="margin-right:.25rem">${esc(r.replace(/_/g, ' '))}</span>`).join('')
+      : '<span style="color:var(--muted)">—</span>';
+    return `<tr data-conv-user="${esc(c.user_id)}" data-conv-id="${esc(c.id)}" style="cursor:pointer">
+      <td>${esc(c.user_email || '—')}</td>
+      <td>${fmtDateTime(c.started_at)}</td>
+      <td>${fmtDateTime(c.updated_at)}</td>
+      <td>${c.message_count ?? 0}</td>
+      <td>${escBadge}</td>
+      <td style="color:var(--muted);font-size:.8rem">${esc((c.last_message_preview || '').slice(0, 120))}</td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('chatLogBody').addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-conv-id]');
+  if (!tr) return;
+  openChatLogDrawer(tr.dataset.convUser, tr.dataset.convId);
+});
+
+async function openChatLogDrawer(userId, convId) {
+  const res = await apiFetch(`/api/admin/chat-logs/${encodeURIComponent(userId)}/${encodeURIComponent(convId)}`);
+  if (!res.ok) return;
+  const c = await res.json();
+
+  const badge = document.getElementById('chatLogDrawerBadge');
+  badge.textContent = c.escalation_count
+    ? `${c.escalation_count} escalation${c.escalation_count === 1 ? '' : 's'}`
+    : 'Not escalated';
+
+  function row(label, value) {
+    if (!value && value !== 0) return '';
+    return `<div class="run-detail-row"><span class="run-detail-label">${esc(label)}</span>
+      <span class="run-detail-value">${esc(String(value))}</span></div>`;
+  }
+  function section(title) {
+    return `<div class="section-label run-detail-section">${esc(title)}</div>`;
+  }
+
+  let html = section('Conversation');
+  html += row('User', c.user_email);
+  html += row('Started', fmtDateTime(c.started_at));
+  html += row('Last activity', fmtDateTime(c.updated_at));
+
+  if (c.escalations && c.escalations.length) {
+    html += section('Escalations');
+    c.escalations.forEach(e => {
+      const status = e.sent_ok ? '' : ' <span style="color:var(--error)">(send failed)</span>';
+      html += row(fmtDateTime(e.at), `[${e.reason.replace(/_/g, ' ')}] ${e.summary}${status}`);
+    });
+  }
+
+  html += section('Transcript');
+  html += '<div class="chatlog-transcript">';
+  (c.messages || []).forEach(m => {
+    const who = m.role === 'user' ? (c.user_email || 'User') : 'Bot';
+    const attach = (m.attachments && m.attachments.length)
+      ? `<div class="chatlog-attach">📎 ${m.attachments.map(esc).join(', ')}</div>` : '';
+    html += `<div class="chatlog-msg chatlog-${esc(m.role)}">
+      <div class="chatlog-msg-meta">${esc(who)} · ${fmtDateTime(m.at)}</div>
+      <div class="chatlog-msg-text">${esc(m.text)}</div>
+      ${attach}
+    </div>`;
+  });
+  html += '</div>';
+
+  document.getElementById('chatLogDrawerBody').innerHTML = html;
+
+  const replyBtn = document.getElementById('chatLogReplyBtn');
+  const lastEscalation = (c.escalations || [])[c.escalations.length - 1];
+  if (lastEscalation && c.user_email) {
+    const subject = 'Re: ' + lastEscalation.email_subject;
+    replyBtn.href = `mailto:${encodeURIComponent(c.user_email)}?subject=${encodeURIComponent(subject)}`;
+    replyBtn.classList.remove('hidden');
+  } else {
+    replyBtn.classList.add('hidden');
+  }
+
+  document.getElementById('chatLogDrawer').classList.add('open');
+  document.getElementById('chatLogDrawerOverlay').classList.add('open');
+}
+
+function closeChatLogDrawer() {
+  document.getElementById('chatLogDrawer').classList.remove('open');
+  document.getElementById('chatLogDrawerOverlay').classList.remove('open');
+}
+document.getElementById('chatLogDrawerClose').addEventListener('click', closeChatLogDrawer);
+document.getElementById('chatLogDrawerCloseBtn').addEventListener('click', closeChatLogDrawer);
+document.getElementById('chatLogDrawerOverlay').addEventListener('click', closeChatLogDrawer);
+
+document.getElementById('chatLogSearch').addEventListener('input', renderChatLogs);
+document.getElementById('chatLogEscalatedOnly').addEventListener('change', renderChatLogs);
+
+document.querySelector('[data-tab="chatlogs"]').addEventListener('click', () => {
+  if (!_chatLogsLoaded) { _chatLogsLoaded = true; loadChatLogs(); }
 });
 
 // ── KB Categories ─────────────────────────────────────────────────────

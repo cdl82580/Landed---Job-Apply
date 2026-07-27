@@ -103,7 +103,9 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - Branded with the app's brand colors (`public/theme.json`); the default Chainlit header logo is hidden since it didn't fit the widget's compact size
 - `public/copilot-overrides.css` (loaded via `mountChainlitWidget`'s `customCssUrl`, served by Chainlit itself at `/chat/public/copilot-overrides.css`) fixes the vendored widget's `100vh`-based sizing — mobile Safari's address bar makes that unreliable in portrait — and widens the panel on small screens
 - Requires `CHAINLIT_AUTH_SECRET` (Chainlit's own JWT signing secret — see Deployment) in addition to the existing `ANTHROPIC_API_KEY`
-- Silent escalation: the model has a `flag_for_team` tool it calls when it can't answer from the KB, or the user reports a bug or leaves feedback. This fires a Resend email (to `SUPPORT_NOTIFY_EMAIL`, default `cdl825@gmail.com`) with the reason, a summary, and the user's email/role — the bot never mentions this to the user, it just acknowledges naturally. Rate-limited separately (3/hour/user) from the general chat rate limit
+- Silent escalation: the model has a `flag_for_team` tool it calls when it can't answer from the KB, or the user reports a bug or leaves feedback. Before calling it for a bug or unanswerable question, it asks one short clarifying follow-up first (page/action, whether it's reproducible, error text, screenshot); straightforward feedback skips that. This fires a Resend email (to `SUPPORT_NOTIFY_EMAIL`, default `cdl825@gmail.com`) with the reason, a summary, and the full conversation transcript so far — the bot never mentions this to the user, it just acknowledges naturally. `reply_to` is set to the user's own email, so replying in the team's inbox reaches them directly; repeated escalations in the same chat session are threaded into one email via `Message-ID`/`In-Reply-To`/`References`. Rate-limited separately (3/hour/user) from the general chat rate limit
+- Screenshots/files the user attaches are read into memory immediately (Chainlit's on-disk copies don't outlive the session) and forwarded as email attachments on escalation (capped at 5 files / 8MB each); images are also passed to Claude as vision content so it can actually see what the user attached
+- Every conversation is persisted to Tigris (`chat-logs/{user_id}/{conversation_id}.json` + a per-user `_index.json` for fast listing — see `scripts/chat_logs.py`) and viewable admin-only via the **Chat Logs** tab in `/admin.html` (`routers/chat_logs.py`), including the full transcript, any escalations, and a "Reply to user" mailto link
 
 ### Slack Bot
 See [Slack Commands](#slack-commands) section below.
@@ -497,6 +499,7 @@ Use `?tab=` to deep-link to a specific tab:
 - `/admin.html?tab=auditlog`
 - `/admin.html?tab=webhooks`
 - `/admin.html?tab=kb`
+- `/admin.html?tab=chatlogs`
 
 ---
 
@@ -627,6 +630,8 @@ See `JobApply.postman_collection.json` for the full request/response reference.
 | DELETE | `/api/admin/webhooks/{id}` | admin | Delete webhook |
 | POST | `/api/admin/webhooks/{id}/test` | admin | Send test delivery |
 | GET | `/api/admin/webhooks/{id}/deliveries` | admin | Last 25 deliveries |
+| GET | `/api/admin/chat-logs` | admin | All KB support-chatbot conversations across all users, newest first |
+| GET | `/api/admin/chat-logs/{user_id}/{conversation_id}` | admin | Full transcript for one conversation |
 
 ---
 
