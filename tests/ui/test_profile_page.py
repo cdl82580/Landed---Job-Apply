@@ -87,6 +87,9 @@ class TestProfileEditFlow:
         auth_page.goto("/profile.html")
         auth_page.wait_for_load_state("networkidle", timeout=15_000)
         auth_page.click("#profileEditBtn")
+        # Edit mode defaults to the guided wizard — opt into the raw
+        # markdown editor to reach #profile_text / #mdToolbar.
+        auth_page.click("#toRawModeLink")
         expect(auth_page.locator("#profile_text")).to_be_visible(timeout=8_000)
         expect(auth_page.locator("#mdToolbar")).to_be_visible()
 
@@ -94,6 +97,7 @@ class TestProfileEditFlow:
         auth_page.goto("/profile.html")
         auth_page.wait_for_selector("#profileEditBtn", timeout=8_000)
         auth_page.click("#profileEditBtn")
+        auth_page.click("#toRawModeLink")
         toolbar = auth_page.locator("#mdToolbar")
         expect(toolbar).to_be_visible(timeout=5_000)
         expect(toolbar.locator(".md-btn").first).to_be_visible(timeout=5_000)

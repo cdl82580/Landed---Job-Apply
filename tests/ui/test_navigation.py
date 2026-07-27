@@ -5,7 +5,7 @@ from playwright.sync_api import expect
 
 
 PAGES = [
-    ("/agents.html",   "Agents - Job Apply"),
+    ("/agents.html",   "Agents - Landed"),
     ("/tracking.html", None),
     ("/calendar.html", None),
     ("/profile.html",  None),
@@ -27,7 +27,7 @@ class TestNavigation:
         auth_page.wait_for_load_state("domcontentloaded")
         auth_page.locator("a[href='/agents.html']").first.click()
         auth_page.wait_for_url("**/agents.html", timeout=8_000)
-        expect(auth_page).to_have_title("Agents - Job Apply")
+        expect(auth_page).to_have_title("Agents - Landed")
 
     def test_tracker_link_from_agent_page(self, auth_page):
         auth_page.goto("/agents.html")

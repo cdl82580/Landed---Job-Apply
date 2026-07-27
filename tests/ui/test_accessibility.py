@@ -36,18 +36,26 @@ class TestLoginAccessibility:
 
 
 class TestAgentPageAccessibility:
-    def test_job_posting_field_has_label(self, auth_page):
+    """#formCard starts collapsed — #formToggle must be clicked to reveal
+    the job_posting/company/role fields inside #formBody."""
+
+    def _expand_form(self, auth_page):
         auth_page.goto("/agents.html")
+        auth_page.locator("#formToggle").click()
+        auth_page.wait_for_timeout(300)
+
+    def test_job_posting_field_has_label(self, auth_page):
+        self._expand_form(auth_page)
         label = auth_page.locator("label[for='job_posting']")
         expect(label).to_be_visible()
 
     def test_company_field_has_label(self, auth_page):
-        auth_page.goto("/agents.html")
+        self._expand_form(auth_page)
         label = auth_page.locator("label[for='company']")
         expect(label).to_be_visible()
 
     def test_role_field_has_label(self, auth_page):
-        auth_page.goto("/agents.html")
+        self._expand_form(auth_page)
         label = auth_page.locator("label[for='role']")
         expect(label).to_be_visible()
 

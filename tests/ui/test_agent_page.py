@@ -18,7 +18,7 @@ AGENT_PAGE = "/agents.html"
 class TestAgentPageStructure:
     def test_page_title(self, auth_page):
         auth_page.goto(AGENT_PAGE)
-        expect(auth_page).to_have_title("Agents - Job Apply")
+        expect(auth_page).to_have_title("Agents - Landed")
 
     def test_header_user_name_shown(self, auth_page):
         auth_page.goto(AGENT_PAGE)
@@ -49,27 +49,36 @@ class TestAgentPageStructure:
 
 
 class TestRunForm:
-    def test_run_form_visible(self, auth_page):
+    """The "New Application" card (#formCard) starts collapsed — #formBody is
+    hidden until #formToggle is clicked (or the page auto-expands it via a
+    ?app_id=&autorun=1 redirect from the tracker)."""
+
+    def _expand_form(self, auth_page):
         auth_page.goto(AGENT_PAGE)
+        auth_page.locator("#formToggle").click()
+        auth_page.wait_for_timeout(300)
+
+    def test_run_form_visible(self, auth_page):
+        self._expand_form(auth_page)
         expect(auth_page.locator("#runForm")).to_be_visible()
 
     def test_job_posting_field_present(self, auth_page):
-        auth_page.goto(AGENT_PAGE)
+        self._expand_form(auth_page)
         expect(auth_page.locator("#job_posting")).to_be_visible()
 
     def test_company_and_role_fields_present(self, auth_page):
-        auth_page.goto(AGENT_PAGE)
+        self._expand_form(auth_page)
         expect(auth_page.locator("#company")).to_be_visible()
         expect(auth_page.locator("#role")).to_be_visible()
 
     def test_generate_button_present(self, auth_page):
-        auth_page.goto(AGENT_PAGE)
+        self._expand_form(auth_page)
         btn = auth_page.locator("#submitBtn").first
         expect(btn).to_be_visible()
         expect(btn).to_contain_text("Generate")
 
     def test_tracker_app_picker_present(self, auth_page):
-        auth_page.goto(AGENT_PAGE)
+        self._expand_form(auth_page)
         expect(auth_page.locator("#runAppSearch")).to_be_visible()
 
     def test_progress_card_hidden_by_default(self, auth_page):

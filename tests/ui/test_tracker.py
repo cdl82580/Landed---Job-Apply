@@ -7,7 +7,10 @@ from playwright.sync_api import expect
 class TestTrackerPageStructure:
     def test_page_loads(self, auth_page):
         auth_page.goto("/tracking.html")
-        auth_page.wait_for_selector("#appTable, #appCards", timeout=10_000)
+        # #appTable/#appCards stay hidden and #emptyState shows instead when
+        # the account has zero tracked applications — all three are valid
+        # "page rendered" states.
+        auth_page.wait_for_selector("#appTable:not(.hidden), #appCards:not(:empty), #emptyState:not(.hidden)", timeout=10_000)
 
     def test_add_button_present(self, auth_page):
         auth_page.goto("/tracking.html")

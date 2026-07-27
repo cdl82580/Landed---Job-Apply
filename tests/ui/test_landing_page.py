@@ -12,7 +12,7 @@ class TestLandingPageStructure:
 
     def test_title_present(self, anon_page):
         anon_page.goto("/")
-        assert "Job Apply" in anon_page.title()
+        assert "Landed" in anon_page.title()
 
     def test_hero_heading_visible(self, anon_page):
         anon_page.goto("/")
