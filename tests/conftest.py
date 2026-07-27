@@ -27,6 +27,7 @@ os.environ.setdefault("AWS_ACCESS_KEY_ID", "test-key")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "test-secret")
 os.environ.setdefault("AWS_ENDPOINT_URL_S3", "https://test.storage.example.com")
 os.environ.setdefault("APP_URL", "http://testserver")
+os.environ.setdefault("CHAINLIT_AUTH_SECRET", "test-chainlit-secret-do-not-use-in-prod")
 
 # ── In-memory storage backend ─────────────────────────────────────────────────
 
