@@ -3816,6 +3816,9 @@ _NO_CACHE_PATHS = {
     "img/logo-dark.png",
     "img/logo-light.png",
     "img/chat-icon.png",
+    "img/teams-color-icon.png",
+    "img/teams-outline-icon.png",
+    "img/slack-app-icon.png",
 }
 
 class NoCacheHTMLStaticFiles(StaticFiles):

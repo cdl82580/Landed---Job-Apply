@@ -25,7 +25,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - **SSE progress streaming** — live log output while the agent runs; `done` event includes `replacements_warning` if XML edits partially failed
 - **Machine pinning** — `machine_id` returned from POST endpoints; client sets `fly-force-instance-id` cookie before opening EventSource to guarantee SSE stream hits the same Fly.io machine
 - **bfcache prevention** — Web Lock acquired on page load keeps all HTML pages ineligible for Chrome's back/forward cache; server-side middleware also injects `no-store` headers, `<meta>` cache tags, and a `pageshow` reload script into every HTML response
-- **Branding asset cache-busting** — `favicon.png` and `img/{logo.png,logo-dark.png,logo-light.png,chat-icon.png}` get the same `no-store` treatment as HTML (see `_NO_CACHE_PATHS` in `api.py`), since these filenames get overwritten in place whenever the logo/icon is redesigned and would otherwise serve stale cached bytes indefinitely
+- **Branding asset cache-busting** — `favicon.png` and `img/{logo.png,logo-dark.png,logo-light.png,chat-icon.png,teams-color-icon.png,teams-outline-icon.png,slack-app-icon.png}` get the same `no-store` treatment as HTML (see `_NO_CACHE_PATHS` in `api.py`), since these filenames get overwritten in place whenever the logo/icon is redesigned and would otherwise serve stale cached bytes indefinitely
 
 ### Application Tracker
 - Full CRUD for job applications — company (via Logo.dev search), role, status, recruiter, salary, DUA tracking
@@ -185,7 +185,7 @@ job-apply/
 │   ├── terms.html             ← Terms of use (public, unauthenticated — required by the Teams manifest's termsOfUseUrl)
 │   ├── marked.min.js          ← Bundled marked.js (used by profile.html, register.html, profile-wizard.js's review step)
 │   ├── libphonenumber-min.js  ← Vendored libphonenumber-js UMD bundle (Resume Builder phone formatting)
-│   └── img/                   ← logo.png + landing page assets (Slack/Teams brand icons, Unsplash photos)
+│   └── img/                   ← logo.png + landing page assets (Slack/Teams brand icons, Unsplash photos, teams-color-icon.png + teams-outline-icon.png packaged into teams_bot/manifest, slack-app-icon.png for manual upload to the Slack app dashboard)
 ├── routers/
 │   ├── applications.py        ← Tracker CRUD + comments + linked runs
 │   ├── calendar.py            ← Calendar event + reminder CRUD
