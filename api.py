@@ -3803,11 +3803,25 @@ _NO_CACHE_HEADERS = {
 _BFCACHE_SCRIPT = b'<script>(function(){if(navigator.locks)navigator.locks.request("_nc",{mode:"exclusive"},()=>new Promise(()=>{}));window.addEventListener("pageshow",function(e){if(e.persisted)location.reload();});})();</script>'
 _META_NO_CACHE = b'<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">'
 
+
+# Branding assets get swapped in place (same filename, new bytes) whenever the
+# logo/favicon/chat icon are redesigned, so they need the same no-cache
+# treatment as HTML — otherwise browsers keep serving stale cached bytes
+# indefinitely since StaticFiles doesn't set an explicit Cache-Control.
+_NO_CACHE_PATHS = {
+    "favicon.png",
+    "img/logo.png",
+    "img/logo-dark.png",
+    "img/logo-light.png",
+    "img/chat-icon.png",
+}
+
 class NoCacheHTMLStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
         is_html = path.endswith(".html") or path in ("", "/")
-        if is_html:
-            # Strip conditional headers so server never returns 304 for HTML
+        is_no_cache = is_html or path in _NO_CACHE_PATHS
+        if is_no_cache:
+            # Strip conditional headers so server never returns 304 for these
             scope = dict(scope)
             scope["headers"] = [
                 (k, v) for k, v in scope.get("headers", [])
@@ -3825,7 +3839,7 @@ class NoCacheHTMLStaticFiles(StaticFiles):
                 media_type="text/html",
                 headers=_NO_CACHE_HEADERS,
             )
-        if is_html:
+        if is_no_cache and not (is_html and hasattr(response, "path")):
             for k, v in _NO_CACHE_HEADERS.items():
                 response.headers[k] = v
         return response

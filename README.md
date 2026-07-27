@@ -25,6 +25,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - **SSE progress streaming** — live log output while the agent runs; `done` event includes `replacements_warning` if XML edits partially failed
 - **Machine pinning** — `machine_id` returned from POST endpoints; client sets `fly-force-instance-id` cookie before opening EventSource to guarantee SSE stream hits the same Fly.io machine
 - **bfcache prevention** — Web Lock acquired on page load keeps all HTML pages ineligible for Chrome's back/forward cache; server-side middleware also injects `no-store` headers, `<meta>` cache tags, and a `pageshow` reload script into every HTML response
+- **Branding asset cache-busting** — `favicon.png` and `img/{logo.png,logo-dark.png,logo-light.png,chat-icon.png}` get the same `no-store` treatment as HTML (see `_NO_CACHE_PATHS` in `api.py`), since these filenames get overwritten in place whenever the logo/icon is redesigned and would otherwise serve stale cached bytes indefinitely
 
 ### Application Tracker
 - Full CRUD for job applications — company (via Logo.dev search), role, status, recruiter, salary, DUA tracking
