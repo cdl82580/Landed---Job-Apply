@@ -85,12 +85,12 @@
     .app-logo img { width: 36px; height: 36px; }
     header h1 { font-size: 1.25rem; font-weight: 700; color: var(--primary); margin: 0; white-space: nowrap; }
 
-    .header-search {
-      flex: 1;
+    .kb-search {
       max-width: 420px;
+      margin: 0 auto 1.75rem;
       position: relative;
     }
-    .header-search svg {
+    .kb-search svg {
       position: absolute;
       left: .65rem;
       top: 50%;
@@ -98,7 +98,7 @@
       color: var(--muted);
       pointer-events: none;
     }
-    .header-search input {
+    .kb-search input {
       width: 100%;
       padding: .45rem .75rem .45rem 2.1rem;
       border: 1px solid var(--input-border);
@@ -110,11 +110,11 @@
       transition: border-color .15s, box-shadow .15s;
       outline: none;
     }
-    .header-search input:focus {
+    .kb-search input:focus {
       border-color: var(--border);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--border) 20%, transparent);
     }
-    .header-search input::placeholder { color: var(--muted); }
+    .kb-search input::placeholder { color: var(--muted); }
 
     .header-actions { display: flex; align-items: center; gap: .25rem; flex-shrink: 0; }
     .header-icon-btn {
@@ -276,6 +276,7 @@
     .home-sub { color: var(--muted); font-size: .9rem; margin: 0 0 1.75rem; }
 
     .cat-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .875rem; }
+    .cat-cards.hidden { display: none; }
     .cat-card {
       background: var(--bg-card);
       border: 1px solid var(--card-border);
@@ -292,7 +293,7 @@
 
     /* ── Responsive ── */
     @media (max-width: 700px) {
-      .header-search { max-width: 180px; }
+      .kb-search { max-width: 100%; }
     }
 
     
@@ -344,13 +345,6 @@
       <h1>Knowledge Base</h1>
     </div>
 
-    <div class="header-search">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-      </svg>
-      <input type="text" id="globalSearch" placeholder="Search articles…" autocomplete="off" spellcheck="false">
-    </div>
-
     <div class="header-actions" id="headerActions">
       <button class="theme-toggle" id="themeToggle"></button>
       <!-- icons injected by renderHeaderIcons() after auth check -->
@@ -361,16 +355,23 @@
 <div class="layout">
   <main class="main" id="main">
 
-    <!-- Search results -->
-    <div class="search-results" id="searchResults">
-      <div style="font-size:.8rem;color:var(--muted);margin-bottom:1rem;" id="searchMeta"></div>
-      <div id="searchList"></div>
-    </div>
-
     <!-- Home view -->
     <div class="home-view visible" id="homeView">
       <p class="home-title">Welcome to the Knowledge Base</p>
       <p class="home-sub" id="homeSub">Everything you need to run great job applications — from role framing to workflow.</p>
+      <div class="kb-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input type="text" id="globalSearch" placeholder="Search articles…" autocomplete="off" spellcheck="false">
+      </div>
+
+      <!-- Search results -->
+      <div class="search-results" id="searchResults">
+        <div style="font-size:.8rem;color:var(--muted);margin-bottom:1rem;" id="searchMeta"></div>
+        <div id="searchList"></div>
+      </div>
+
       <div class="cat-cards" id="catCards"></div>
     </div>
 
@@ -2236,6 +2237,9 @@ function buildHomeCards() {
 
 function showHome() {
   hideAll();
+  document.getElementById('globalSearch').value = '';
+  document.getElementById('searchResults').classList.remove('visible');
+  document.getElementById('catCards').classList.remove('hidden');
   document.getElementById('homeView').classList.add('visible');
   location.hash = '';
   currentView = 'home';
@@ -2323,13 +2327,12 @@ function setupSearch() {
 }
 
 function runSearch(q) {
+  const catCards = document.getElementById('catCards');
+  const results = document.getElementById('searchResults');
+
   if (!q) {
-    // Restore previous view
-    hideAll();
-    document.getElementById('searchResults').classList.remove('visible');
-    if (currentView === 'article') { showArticle(currentArt); return; }
-    if (currentView === 'category') { showCategory(currentCat); return; }
-    showHome();
+    results.classList.remove('visible');
+    catCards.classList.remove('hidden');
     return;
   }
 
@@ -2372,8 +2375,8 @@ function runSearch(q) {
     });
   }
 
-  hideAll();
-  document.getElementById('searchResults').classList.add('visible');
+  catCards.classList.add('hidden');
+  results.classList.add('visible');
 }
 
 function highlight(text, q) {
