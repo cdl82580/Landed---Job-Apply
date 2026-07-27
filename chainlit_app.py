@@ -15,6 +15,8 @@ the KB grows large enough that this stops fitting comfortably in context.
 
 from __future__ import annotations
 
+import logging
+import os
 import re
 import time
 from http.cookies import SimpleCookie
@@ -27,6 +29,8 @@ import chainlit as cl
 from routers.kb import _load as _load_kb
 from scripts.session import resolve_session_secret, verify_session_token
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_MODEL = "claude-sonnet-5"
 _SESSION_COOKIE_NAME = "session"
 
@@ -34,6 +38,17 @@ _SYSTEM_PROMPT_HEADER = """You are the support assistant for Landed, embedded as
 in the web app. Answer only using the reference material provided below — \
 if the answer isn't covered by it, say you're not sure and point the user to \
 the Knowledge Base at /kb.html rather than guessing. Keep answers short and direct.
+
+Call the flag_for_team tool (silently, in the background) whenever:
+- You can't answer the user's question from the reference material below, or
+- The user is reporting a bug or something broken, or
+- The user wants to leave feedback or a suggestion about Landed
+
+This quietly notifies the team so a human can follow up — it does not send \
+anything to the user and the user should never be told an email or \
+notification is being sent. After calling it, just reply naturally (e.g. \
+acknowledge you've noted it / passed it along, or that someone will follow \
+up) — never mention email, notifications, or "the team's inbox" by name.
 """
 
 _README_PATH = Path(__file__).resolve().parent / "README.md"
@@ -74,6 +89,110 @@ def _rate_limited(key: str) -> bool:
     hits.append(now)
     _rl_buckets[key] = hits
     return False
+
+
+# ---------------------------------------------------------------------------
+# Escalation — a tool Claude can call to silently notify the team when it
+# can't answer from the KB, or the user reports a bug / leaves feedback.
+# Separate, tighter rate limit from the general chat one above so a chatty
+# session can't turn into a flood of emails.
+# ---------------------------------------------------------------------------
+
+_FLAG_RATE_LIMIT_MAX = 3
+_FLAG_RATE_LIMIT_WINDOW_SECS = 3600
+_flag_buckets: Dict[str, list[float]] = {}
+
+
+def _flag_rate_limited(key: str) -> bool:
+    now = time.time()
+    hits = [t for t in _flag_buckets.get(key, []) if now - t < _FLAG_RATE_LIMIT_WINDOW_SECS]
+    if len(hits) >= _FLAG_RATE_LIMIT_MAX:
+        _flag_buckets[key] = hits
+        return True
+    hits.append(now)
+    _flag_buckets[key] = hits
+    return False
+
+
+_NOTIFY_TO_ADDRESS = os.environ.get("SUPPORT_NOTIFY_EMAIL", "cdl825@gmail.com")
+_NOTIFY_FROM_ADDRESS = os.environ.get("RESEND_FROM", "Landed <hello@cdlav.us>")
+
+FLAG_FOR_TEAM_TOOL = {
+    "name": "flag_for_team",
+    "description": (
+        "Silently notify the Landed team in the background. Use this when you "
+        "can't answer the user's question from the reference material, when "
+        "the user reports a bug, or when they offer feedback/a suggestion. "
+        "This never surfaces anything to the user — don't mention it."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "reason": {
+                "type": "string",
+                "enum": ["unanswered_question", "bug_report", "feedback"],
+                "description": "Why this is being flagged.",
+            },
+            "summary": {
+                "type": "string",
+                "description": "One-line summary of the question, bug, or feedback.",
+            },
+        },
+        "required": ["reason", "summary"],
+    },
+}
+
+_FLAG_REASON_LABELS = {
+    "unanswered_question": "Unanswered question",
+    "bug_report": "Bug report",
+    "feedback": "Feedback",
+}
+
+
+def _flag_for_team(user: Optional[cl.User], reason: str, summary: str, last_message: str) -> bool:
+    """Send a background notification email via Resend. Returns True on success
+    (or on a rate-limit skip, so the model doesn't treat it as a failure worth
+    retrying)."""
+    meta = (user.metadata or {}) if user else {}
+    user_key = meta.get("user_id", "anonymous")
+
+    if _flag_rate_limited(user_key):
+        logger.info("_flag_for_team: rate-limited, skipping send (user=%r)", user_key)
+        return True
+
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not api_key:
+        logger.warning("_flag_for_team: RESEND_API_KEY not set — notification not sent")
+        return False
+
+    label = _FLAG_REASON_LABELS.get(reason, reason)
+    subject = f"[Landed KB Bot] {label}: {summary[:80]}"
+    body = (
+        f"Reason: {label}\n"
+        f"User: {meta.get('email', 'unknown')} (role: {meta.get('role', 'unknown')})\n\n"
+        f"Summary: {summary}\n\n"
+        f"Last message from user:\n{last_message}\n"
+    )
+    try:
+        import requests
+        resp = requests.post(
+            "https://api.resend.com/emails",
+            json={
+                "from": _NOTIFY_FROM_ADDRESS,
+                "to": [_NOTIFY_TO_ADDRESS],
+                "subject": subject,
+                "text": body,
+            },
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=10,
+        )
+        ok = 200 <= resp.status_code < 300
+        if not ok:
+            logger.warning("_flag_for_team: Resend returned %d: %s", resp.status_code, resp.text[:200])
+        return ok
+    except Exception:
+        logger.exception("_flag_for_team: request failed")
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -198,18 +317,40 @@ async def on_message(message: cl.Message):
     reply = cl.Message(content="")
     await reply.send()
 
-    full_text = ""
-    async with _get_client().messages.stream(
-        model=DEFAULT_MODEL,
-        max_tokens=1024,
-        system=system_prompt,
-        messages=history,
-    ) as stream:
-        async for token in stream.text_stream:
-            full_text += token
-            await reply.stream_token(token)
+    # Usually one round (plain answer or answer + a background tool call).
+    # Cap it so a confused model can't loop tool calls forever.
+    for _ in range(3):
+        async with _get_client().messages.stream(
+            model=DEFAULT_MODEL,
+            max_tokens=1024,
+            system=system_prompt,
+            messages=history,
+            tools=[FLAG_FOR_TEAM_TOOL],
+        ) as stream:
+            async for token in stream.text_stream:
+                await reply.stream_token(token)
+            final_message = await stream.get_final_message()
 
-    history.append({"role": "assistant", "content": full_text})
+        history.append({"role": "assistant", "content": final_message.content})
+
+        tool_calls = [b for b in final_message.content if b.type == "tool_use"]
+        if not tool_calls:
+            break
+
+        tool_results = []
+        for call in tool_calls:
+            ok = _flag_for_team(
+                user,
+                call.input.get("reason", "feedback"),
+                call.input.get("summary", message.content),
+                message.content,
+            )
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": call.id,
+                "content": "Logged." if ok else "Not logged — continue naturally without mentioning this.",
+            })
+        history.append({"role": "user", "content": tool_results})
+
     cl.user_session.set("history", history[-_MAX_HISTORY_MESSAGES:])
-
     await reply.update()

@@ -103,6 +103,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - Branded with the app's brand colors (`public/theme.json`); the default Chainlit header logo is hidden since it didn't fit the widget's compact size
 - `public/copilot-overrides.css` (loaded via `mountChainlitWidget`'s `customCssUrl`, served by Chainlit itself at `/chat/public/copilot-overrides.css`) fixes the vendored widget's `100vh`-based sizing — mobile Safari's address bar makes that unreliable in portrait — and widens the panel on small screens
 - Requires `CHAINLIT_AUTH_SECRET` (Chainlit's own JWT signing secret — see Deployment) in addition to the existing `ANTHROPIC_API_KEY`
+- Silent escalation: the model has a `flag_for_team` tool it calls when it can't answer from the KB, or the user reports a bug or leaves feedback. This fires a Resend email (to `SUPPORT_NOTIFY_EMAIL`, default `cdl825@gmail.com`) with the reason, a summary, and the user's email/role — the bot never mentions this to the user, it just acknowledges naturally. Rate-limited separately (3/hour/user) from the general chat rate limit
 
 ### Slack Bot
 See [Slack Commands](#slack-commands) section below.
@@ -464,6 +465,7 @@ Both process groups share the same Docker image and all Fly secrets.
 | `BUCKET_NAME` | Tigris bucket name |
 | `RESEND_API_KEY` | Resend — email verification, password-change, and calendar reminder emails |
 | `RESEND_FROM` | Sender address (default: `Landed <hello@cdlav.us>`) |
+| `SUPPORT_NOTIFY_EMAIL` | Where the KB chatbot's `flag_for_team` tool sends its silent escalation emails (default: `cdl825@gmail.com`) |
 | `APP_URL` | Public app URL (default: `https://apply.cdlav.us`) |
 | `APP_USER_EMAIL` | Primary user email — used by the Slack bot (always) and Teams bot (fallback, before/without a per-user link) to resolve API identity |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID |
