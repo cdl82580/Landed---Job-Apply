@@ -404,7 +404,8 @@
 <header>
   <div class="header-inner">
     <div class="header-left">
-      <div class="app-logo"><img src="/img/logo.png" alt="Landed logo"></div>
+      <div class="app-logo"><img class="logo-img" src="/img/logo.png" alt="Landed logo"></div>
+      <script>(function(){function syncLogoTheme(){var d=document.documentElement.getAttribute('data-theme')==='dark';document.querySelectorAll('img.logo-img').forEach(function(i){i.src=d?'/img/logo-dark.png':'/img/logo-light.png';});}syncLogoTheme();new MutationObserver(syncLogoTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});})();</script>
       <div>
         <div class="header-title">Landed</div>
         <p class="header-sub">AI-powered job application copilot</p>

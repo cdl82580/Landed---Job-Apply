@@ -381,6 +381,7 @@
     <div class="header-inner">
     <div class="header-left">
       <img class="logo-img" src="/img/logo.png" alt="Logo">
+      <script>(function(){function syncLogoTheme(){var d=document.documentElement.getAttribute('data-theme')==='dark';document.querySelectorAll('img.logo-img').forEach(function(i){i.src=d?'/img/logo-dark.png':'/img/logo-light.png';});}syncLogoTheme();new MutationObserver(syncLogoTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});})();</script>
       <div>
         <div class="logo">Profile Settings</div>
         <p class="logo-subtitle">Manage your account, resume, and voice guide.<span class="model-badge hidden" id="modelBadge"><span class="model-badge-icon">✦</span><span id="modelBadgeText"></span></span></p>
@@ -1070,7 +1071,7 @@
         window.mountChainlitWidget({
           chainlitServer: window.location.origin + '/chat',
           theme: theme,
-          button: { imageUrl: '/img/logo.png' },
+          button: { imageUrl: '/img/chat-icon.png' },
         });
       });
   })();

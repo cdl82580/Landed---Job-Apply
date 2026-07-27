@@ -387,7 +387,8 @@
 <header>
   <div class="header-inner">
     <div class="app-logo">
-      <img src="/favicon.png" alt="logo">
+      <img class="logo-img" src="/img/logo.png" alt="logo">
+      <script>(function(){function syncLogoTheme(){var d=document.documentElement.getAttribute('data-theme')==='dark';document.querySelectorAll('img.logo-img').forEach(function(i){i.src=d?'/img/logo-dark.png':'/img/logo-light.png';});}syncLogoTheme();new MutationObserver(syncLogoTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});})();</script>
     </div>
     <div class="header-titles">
       <h1>Landed API</h1>
@@ -750,7 +751,7 @@
         window.mountChainlitWidget({
           chainlitServer: window.location.origin + '/chat',
           theme: theme,
-          button: { imageUrl: '/img/logo.png' },
+          button: { imageUrl: '/img/chat-icon.png' },
         });
       });
   })();

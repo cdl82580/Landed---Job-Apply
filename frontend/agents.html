@@ -675,6 +675,7 @@
     <div class="header-left">
       <div class="app-logo">
         <img class="logo-img" src="/img/logo.png" alt="Logo">
+        <script>(function(){function syncLogoTheme(){var d=document.documentElement.getAttribute('data-theme')==='dark';document.querySelectorAll('img.logo-img').forEach(function(i){i.src=d?'/img/logo-dark.png':'/img/logo-light.png';});}syncLogoTheme();new MutationObserver(syncLogoTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});})();</script>
       </div>
       <div>
         <h1>Agents</h1>
@@ -3500,7 +3501,7 @@
         window.mountChainlitWidget({
           chainlitServer: window.location.origin + '/chat',
           theme: theme,
-          button: { imageUrl: '/img/logo.png' },
+          button: { imageUrl: '/img/chat-icon.png' },
         });
       });
   })();

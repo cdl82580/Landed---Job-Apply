@@ -339,6 +339,7 @@
     <div class="header-left">
       <div class="app-logo">
         <a href="/tracking.html"><img class="logo-img" src="/img/logo.png" alt="Logo"></a>
+<script>(function(){function syncLogoTheme(){var d=document.documentElement.getAttribute('data-theme')==='dark';document.querySelectorAll('img.logo-img').forEach(function(i){i.src=d?'/img/logo-dark.png':'/img/logo-light.png';});}syncLogoTheme();new MutationObserver(syncLogoTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});})();</script>
       </div>
       <h1>Knowledge Base</h1>
     </div>
@@ -2453,7 +2454,7 @@ window.showHome     = showHome;
         window.mountChainlitWidget({
           chainlitServer: window.location.origin + '/chat',
           theme: theme,
-          button: { imageUrl: '/img/logo.png' },
+          button: { imageUrl: '/img/chat-icon.png' },
         });
       });
   })();

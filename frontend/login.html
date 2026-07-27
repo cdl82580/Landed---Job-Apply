@@ -143,6 +143,7 @@
 <div class="card">
   <div class="logo-wrap">
     <img class="logo-img" src="/img/logo.png" alt="Logo">
+    <script>(function(){function syncLogoTheme(){var d=document.documentElement.getAttribute('data-theme')==='dark';document.querySelectorAll('img.logo-img').forEach(function(i){i.src=d?'/img/logo-dark.png':'/img/logo-light.png';});}syncLogoTheme();new MutationObserver(syncLogoTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});})();</script>
     <div class="logo">Landed</div>
   </div>
   <div class="sub">Sign in to your account</div>
