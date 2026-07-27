@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "web",
-      "runtimeExecutable": "/Users/coreylaverdiere/Documents/Claude/Job Apply/.venv/bin/python3",
+      "runtimeExecutable": "/Users/coreylaverdiere/Documents/Claude/Landed (Job Apply)/.venv/bin/python3",
       "runtimeArgs": ["-m", "uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8080"],
       "port": 8080
     }
