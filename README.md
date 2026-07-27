@@ -101,6 +101,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - Answers are grounded in the Knowledge Base only — visible articles are filtered by the same `adminOnly` rule as `kb.html` (admin-only KB content never reaches a non-admin chat session), then stuffed into the system prompt fresh at chat start (no vector store)
 - Admin sessions additionally get the full `README.md` (architecture, deployment, Slack/Teams command reference) as reference material — regular users never see it
 - Branded with the app's brand colors (`public/theme.json`); the default Chainlit header logo is hidden since it didn't fit the widget's compact size
+- `public/copilot-overrides.css` (loaded via `mountChainlitWidget`'s `customCssUrl`, served by Chainlit itself at `/chat/public/copilot-overrides.css`) fixes the vendored widget's `100vh`-based sizing — mobile Safari's address bar makes that unreliable in portrait — and widens the panel on small screens
 - Requires `CHAINLIT_AUTH_SECRET` (Chainlit's own JWT signing secret — see Deployment) in addition to the existing `ANTHROPIC_API_KEY`
 
 ### Slack Bot

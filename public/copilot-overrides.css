@@ -1,0 +1,26 @@
+/* Landed KB chat widget overrides.
+   Injected into the Chainlit copilot's shadow root via mountChainlitWidget's
+   customCssUrl option (see frontend/*.html) — .copilot-container-collapsed
+   and .copilot-container-expanded are stable hook classes the widget ships
+   specifically for this kind of override. */
+
+/* The vendored widget sizes itself with calc(100vh-150px). On mobile Safari,
+   100vh is the layout viewport (address bar hidden) rather than the visual
+   viewport, so in portrait — where the address bar takes real space — the
+   panel renders taller than what's actually visible and its top toolbar ends
+   up above the fold with no way to scroll to it. 100dvh tracks the visible
+   viewport as the address bar shows/hides, which is why landscape (where
+   Safari collapses the bar) was never affected. */
+.copilot-container-collapsed,
+.copilot-container-expanded {
+  height: min(730px, calc(100dvh - 150px)) !important;
+}
+
+@media (max-width: 640px) {
+  .copilot-container-collapsed,
+  .copilot-container-expanded {
+    width: 94vw !important;
+    max-width: 94vw !important;
+    height: min(80dvh, calc(100dvh - 24px)) !important;
+  }
+}

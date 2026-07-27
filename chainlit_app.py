@@ -30,7 +30,7 @@ from scripts.session import resolve_session_secret, verify_session_token
 DEFAULT_MODEL = "claude-sonnet-5"
 _SESSION_COOKIE_NAME = "session"
 
-_SYSTEM_PROMPT_HEADER = """You are the support assistant for Job Apply, embedded as a chat widget \
+_SYSTEM_PROMPT_HEADER = """You are the support assistant for Landed, embedded as a chat widget \
 in the web app. Answer only using the reference material provided below — \
 if the answer isn't covered by it, say you're not sure and point the user to \
 the Knowledge Base at /kb.html rather than guessing. Keep answers short and direct.
@@ -177,7 +177,7 @@ async def on_chat_start():
     cl.user_session.set("history", [])
 
     await cl.Message(
-        content="Hi! I can help with questions about using Job Apply."
+        content="Hi! I can help with questions about using Landed."
     ).send()
 
 
