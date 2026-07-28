@@ -131,6 +131,20 @@ it manually when you're done to avoid leaving it running unnecessarily:
 fly machine start <testrunner-machine-id> --app job-apply-corey
 fly machine stop  <testrunner-machine-id> --app job-apply-corey
 ```
+
+> **Not currently configured on the live app.** As of this writing, none of
+> `TEST_RUNNER_BOT_TOKEN`, `TEST_RUNNER_SIGNING_SECRET`, `TEST_RUNNER_APP_TOKEN`,
+> or `TEST_RUNNER_SLACK_USER_ID` are set as Fly secrets. Starting the machine
+> without them crash-loops `test_runner_bot.py` (`KeyError: 'TEST_RUNNER_BOT_TOKEN'`)
+> until Fly's max-restart count is hit, then it parks itself `stopped`. To make
+> `/run-tests`/`/test-status` work, create the separate "Test Runner" Slack app,
+> grab its bot token / signing secret / Socket Mode app token, then:
+> ```bash
+> fly secrets set TEST_RUNNER_BOT_TOKEN="xoxb-..." TEST_RUNNER_SIGNING_SECRET="..." \
+>   TEST_RUNNER_APP_TOKEN="xapp-..." TEST_RUNNER_SLACK_USER_ID="U..." --app job-apply-corey
+> ```
+> (setting a secret redeploys automatically).
+
 Two commands:
 - `/run-tests [unit | api | slack | all | ui-anon | ui | ui-admin]` — runs the
   matching pytest suite in a background thread and streams a live-updating
@@ -505,7 +519,10 @@ All three process groups share the same Docker image and all Fly secrets.
 | `MICROSOFT_APP_TENANT_ID` | Azure AD tenant ID (single-tenant Teams app) |
 | `GDRIVE_TOKEN_JSON` | Google Drive OAuth token JSON |
 | `GDRIVE_PARENT_FOLDER_ID` | Drive folder ID for run output (`Job Applications`) |
-| `TEST_RUNNER_SLACK_USER_ID` | Slack user ID authorised to run `/run-tests` (falls back to `SLACK_NOTIFY_USER_ID`) |
+| `TEST_RUNNER_BOT_TOKEN` | Bot token (`xoxb-...`) for the separate Test Runner Slack app — **currently unset; see [Test Runner Bot](#test-runner-bot)** |
+| `TEST_RUNNER_SIGNING_SECRET` | Signing secret for the Test Runner Slack app — **currently unset** |
+| `TEST_RUNNER_APP_TOKEN` | App-level token (`xapp-...`) for Socket Mode on the Test Runner Slack app — **currently unset** |
+| `TEST_RUNNER_SLACK_USER_ID` | Slack user ID authorised to run `/run-tests`/`/test-status` — no fallback; if unset, all commands respond "commands disabled" — **currently unset** |
 
 ---
 
