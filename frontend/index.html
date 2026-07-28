@@ -90,6 +90,30 @@
     .header-nav-links a { transition: color .15s; }
     .header-nav-links a:hover { color: var(--text); }
 
+    .mobile-menu-toggle {
+      display: none; align-items: center; justify-content: center;
+      width: 34px; height: 34px; padding: 0; flex-shrink: 0;
+      background: none; border: 1px solid var(--card-border); border-radius: 8px;
+      color: var(--text); cursor: pointer;
+    }
+    .mobile-menu-toggle:hover { border-color: var(--border); }
+    .mobile-menu-toggle svg { width: 18px; height: 18px; }
+    .mobile-menu-toggle .icon-close { display: none; }
+    .mobile-menu-toggle.open .icon-menu { display: none; }
+    .mobile-menu-toggle.open .icon-close { display: block; }
+
+    .mobile-menu {
+      display: none; flex-direction: column; gap: .1rem;
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: var(--bg-card); border-bottom: 1px solid var(--card-border);
+      box-shadow: var(--shadow-sm); padding: .75rem 1.5rem 1.25rem;
+    }
+    .mobile-menu.open { display: flex; }
+    .mobile-menu a { padding: .7rem .1rem; font-size: .95rem; font-weight: 500; color: var(--text); border-radius: 6px; }
+    .mobile-menu-divider { height: 1px; background: var(--card-border); margin: .5rem 0; }
+    .mobile-menu-actions { display: flex; flex-direction: column; gap: .6rem; margin-top: .25rem; }
+    .mobile-menu-actions .btn { width: 100%; }
+
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
       padding: .6rem 1.15rem; border-radius: 8px; font-size: .9rem; font-weight: 600;
@@ -114,6 +138,10 @@
 
     @media (max-width: 780px) {
       .header-nav-links { display: none; }
+    }
+    @media (max-width: 560px) {
+      .header-actions > .btn { display: none; }
+      .mobile-menu-toggle { display: flex; }
     }
     @media (max-width: 480px) {
       header p.header-sub { display: none; }
@@ -422,8 +450,24 @@
       <button class="theme-toggle" id="themeToggle"><span id="themeIcon"></span></button>
       <a class="btn btn-ghost" href="/login.html">Log In</a>
       <a class="btn" href="/register.html">Get Started</a>
+      <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Menu" aria-expanded="false" aria-controls="mobileMenu">
+        <svg class="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+        <svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+      </button>
     </div>
   </div>
+  <nav class="mobile-menu" id="mobileMenu">
+    <a href="#agents">Agents</a>
+    <a href="#tracker">Tracker</a>
+    <a href="#integrations">Integrations</a>
+    <a href="#how-it-works">How it Works</a>
+    <a href="/kb.html">Knowledge Base</a>
+    <div class="mobile-menu-divider"></div>
+    <div class="mobile-menu-actions">
+      <a class="btn btn-ghost" href="/login.html">Log In</a>
+      <a class="btn" href="/register.html">Get Started</a>
+    </div>
+  </nav>
 </header>
 
 <section class="hero">
@@ -783,6 +827,23 @@
   });
   document.getElementById('themeIcon').textContent =
     ICONS[document.documentElement.getAttribute('data-theme')] || ICONS.light;
+
+  (function(){
+    const toggle = document.getElementById('mobileMenuToggle');
+    const menu = document.getElementById('mobileMenu');
+    function closeMenu() {
+      menu.classList.remove('open');
+      toggle.classList.remove('open');
+      toggle.setAttribute('aria-expanded', 'false');
+    }
+    toggle.addEventListener('click', () => {
+      const open = menu.classList.toggle('open');
+      toggle.classList.toggle('open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+    });
+    menu.addEventListener('click', (e) => { if (e.target.tagName === 'A') closeMenu(); });
+    window.addEventListener('resize', () => { if (window.innerWidth > 560) closeMenu(); });
+  })();
 
   // Mini calendar mockup grid — static 5x7, a couple of highlighted event days
   (function(){
