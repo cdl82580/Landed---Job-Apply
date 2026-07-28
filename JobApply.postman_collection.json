@@ -632,6 +632,14 @@
           }
         },
         {
+          "name": "GET /api/applications/{app_id}/runs",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/applications/{{app_id}}/runs",
+            "description": "List Drive runs linked to this application (each has `id`, `type`, `folder_name`, `folder_url`, `gdrive_folder_id`, `linked_at`, `linked_by`)."
+          }
+        },
+        {
           "name": "POST /api/applications/{app_id}/runs",
           "request": {
             "method": "POST",
@@ -679,6 +687,32 @@
             "method": "POST",
             "url": "{{base_url}}/api/applications/{{app_id}}/setup-folder",
             "description": "Create a Google Drive folder for this application and attempt to capture `job_description.md` from the posting URL — all in the background. Returns 202 immediately with `{status: \"started\"}`. The folder is linked to the application record once created. JD extraction is best-effort: LinkedIn and other login-walled URLs will create the folder but not capture a JD."
+          }
+        },
+        {
+          "name": "POST /api/applications/{app_id}/pipeline/jd",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/applications/{{app_id}}/pipeline/jd",
+            "description": "Re-run the setup pipeline with a manually pasted job description — used when automatic extraction from the posting URL fails (e.g. LinkedIn or other login-walled postings). Saves the pasted text as `job_description.md` and re-scores. Returns 202 immediately with `{status: \"started\"}`; progress is streamed on `GET /api/applications/{app_id}/pipeline/stream`.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"job_posting\": \"Full job description text pasted by the user...\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GET /api/applications/{app_id}/pipeline/stream",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/applications/{{app_id}}/pipeline/stream",
+            "description": "SSE stream of setup-folder / pipeline-jd progress (Drive folder creation → JD capture → match scoring). 404 once the pipeline has been evicted or was never started for this application."
           }
         }
       ]
@@ -1908,6 +1942,61 @@
               ]
             },
             "description": "Unauthenticated. Verifies a signed one-time notification token and executes the encoded action. Used in outbound nudge/follow-up email links. Actions: `status` (update application status), `snooze` (suppress notifications for N days). For `status=Applied` without a `date_applied` in the token, redirects to `/confirm-applied.html?token=…` so the user can pick the date. All other actions redirect to `#tracker`. Token TTL is set at issue time (default 7 days)."
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Applied Date (form page)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/confirm-applied?token=NOTIFICATION_TOKEN",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "confirm-applied"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "NOTIFICATION_TOKEN",
+                  "description": "Signed HMAC notification token from email link"
+                }
+              ]
+            },
+            "description": "Unauthenticated. Renders a small HTML date-picker page so the user can confirm the date they applied. Reached via redirect from `GET /api/notifications/action` when `action=status`, `status=Applied`, and the token payload has no `date_applied`."
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Applied Date (submit)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "token",
+                  "value": "NOTIFICATION_TOKEN"
+                },
+                {
+                  "key": "date_applied",
+                  "value": "2026-07-28"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/notifications/confirm-applied",
+            "description": "Unauthenticated form submission from the confirm-applied page. Sets the application's status to `Applied` with the given `date_applied` (defaults to today if omitted), clears researching/follow-up/gone-silent notification snoozes, and returns a small HTML confirmation page."
           },
           "response": []
         }

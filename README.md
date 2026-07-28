@@ -119,6 +119,19 @@ are served unauthenticated at `/privacy` and `/terms` — Teams' permission-cons
 dialog fetches the manifest's `privacyUrl`/`termsOfUseUrl` directly and gets stuck
 in a loop if either 404s or redirects to login.
 
+### Test Runner Bot
+`test_runner_bot.py` is a standalone Slack app (own bot token, signing secret,
+and Socket Mode app token — see `TEST_RUNNER_BOT_TOKEN`/`TEST_RUNNER_SIGNING_SECRET`/
+`TEST_RUNNER_APP_TOKEN`), kept separate because the main bot is at Slack's
+25-command limit. Restricted to the single Slack user ID in
+`TEST_RUNNER_SLACK_USER_ID`. Two commands:
+- `/run-tests [unit | api | slack | all | ui-anon | ui | ui-admin]` — runs the
+  matching pytest suite in a background thread and streams a live-updating
+  result message (one run at a time; a concurrency guard rejects overlapping
+  runs). UI suites drive Playwright against `UI_BASE_URL` using `UI_TEST_EMAIL`/
+  `UI_TEST_PASSWORD`/`UI_ADMIN_EMAIL`/`UI_ADMIN_PASSWORD`.
+- `/test-status` — reports whether a suite is currently running.
+
 ---
 
 ## Agents at a Glance
@@ -441,18 +454,19 @@ fly secrets set GDRIVE_TOKEN_JSON="$(cat ~/.config/job-apply/gdrive_token.json)"
 fly deploy --app job-apply-corey
 ```
 
-The app runs as **two process groups** on Fly.io (defined in `fly.toml`), each scaled to **1 machine**:
+The app runs as **three process groups** on Fly.io (defined in `fly.toml`), each scaled to **1 machine**:
 
 | Process | Command | Machine | Notes |
 |---|---|---|---|
 | `web` | `uvicorn api:app …` | 1 GB, auto-stop | FastAPI web server — 1 machine required (SSE state is in-memory) |
-| `bot` | `python slack_bot.py` | 256 MB, always-on | Slack Socket Mode bot |
+| `bot` | `python slack_bot.py` | 512 MB, always-on | Slack Socket Mode bot (needs Playwright/Chromium for UI tests) |
+| `testrunner` | `python test_runner_bot.py` | 512 MB, always-on | Standalone test-runner bot — separate Slack app, see [Test Runner Bot](#test-runner-bot) |
 
 > **Important:** Keep `web` scaled to exactly 1 machine. Run and prep state is held
 > in-memory; multiple web machines will cause SSE streams to 404 on the wrong instance.
 > If you need to scale, replace the in-memory `_runs`/`_preps`/`_app_questions` dicts with a shared store (Redis, etc.).
 
-Both process groups share the same Docker image and all Fly secrets.
+All three process groups share the same Docker image and all Fly secrets.
 
 **Required secrets:**
 
@@ -544,11 +558,14 @@ See `JobApply.postman_collection.json` for the full request/response reference.
 | POST | `/api/applications/{id}/comments` | cookie | Add comment |
 | PUT | `/api/applications/{id}/comments/{cid}` | cookie | Edit comment |
 | DELETE | `/api/applications/{id}/comments/{cid}` | cookie | Delete comment |
+| GET | `/api/applications/{id}/runs` | cookie | List Drive runs linked to an application |
 | POST | `/api/applications/{id}/runs` | cookie | Link a Drive run to an application |
 | DELETE | `/api/applications/{id}/runs/{lid}` | cookie | Unlink a run |
 | POST | `/api/applications/{id}/score` | cookie | Run (or re-run) resume↔JD match scoring; persists result to record |
 | POST | `/api/applications/{id}/extract-jd` | cookie | Extract JD text from the app's posting URL via Claude |
 | POST | `/api/applications/{id}/setup-folder` | cookie | Create Drive folder + attempt JD capture in background; returns 202 immediately |
+| POST | `/api/applications/{id}/pipeline/jd` | cookie | Re-run the setup pipeline with a manually pasted JD, for when automatic extraction from the posting URL fails; returns 202 |
+| GET | `/api/applications/{id}/pipeline/stream` | cookie | SSE stream of setup-folder/pipeline-jd progress (Drive folder → JD capture → match scoring); 404 once evicted or never started |
 | GET | `/api/companies/search?q=` | — | Logo.dev company search — returns `name`, `domain`, `description`; logos constructed client-side via `img.logo.dev` |
 | GET | `/api/lookups/locations?q=` | cookie | City/place autocomplete (OpenStreetMap Nominatim) for the Resume Builder's location fields — returns `label`, `city`, `state`, `country`, `country_code` |
 | GET | `/api/lookups/institutions?q=` | cookie | School autocomplete for the Resume Builder's education fields — US Dept of Education College Scorecard, falling back to the Hipolabs universities API for non-US schools (only on a zero-match) — returns `name`, `alias`, `city`, `state`, `country`, `domain`; add `&source=international` to search Hipolabs directly, since a Scorecard hit that just isn't the *right* school (e.g. "Oxford") would otherwise never fall through |

@@ -423,11 +423,12 @@ const KB = {
       snippet: 'Every agent this platform offers, side by side — what each produces and how to trigger it from the web app, Slack, or Teams.',
       readTime: '3 min',
       body: `
-<h2>Six Agents, One Job Search</h2>
-<p>Everything in Landed that calls Claude to produce something is one of six agents. Each needs a job description resolvable from a tracked application (a saved <code>job_description.md</code> in its Drive folder, or its posting URL) — except the first <strong>Resume + ATS + Cover Letter</strong> run for an application, which also accepts a pasted job posting directly.</p>
+<h2>Seven Agents, One Job Search</h2>
+<p>Everything in Landed that calls Claude to produce something is one of seven agents. Six operate against a tracked application and need a job description resolvable from it (a saved <code>job_description.md</code> in its Drive folder, or its posting URL) — except the first <strong>Resume + ATS + Cover Letter</strong> run for an application, which also accepts a pasted job posting directly. The seventh, <strong>Master Resume Builder</strong>, needs no job description at all — it builds the master resume itself, from scratch.</p>
 
 <table>
   <tr><th>Agent</th><th>What it produces</th><th>Web (Agent tab)</th><th>Slack</th><th>Teams</th></tr>
+  <tr><td><strong>Master Resume Builder</strong></td><td>A brand-new <code>master.docx</code>, built from structured job/education input instead of an existing resume</td><td>Build Master Resume</td><td>—</td><td>—</td></tr>
   <tr><td><strong>Resume + ATS + Cover Letter</strong></td><td>Tailored resume DOCX, ATS-safe resume DOCX, cover letter DOCX</td><td>Generate</td><td><code>/apply</code></td><td><code>apply</code></td></tr>
   <tr><td><strong>Application Questions</strong></td><td>Answer to a freeform application question, with clarification follow-ups</td><td>Application Questions</td><td><code>/aq</code></td><td><code>aq</code></td></tr>
   <tr><td><strong>Interview Prep</strong></td><td>2-page interview prep reference DOCX</td><td>Interview Prep</td><td><code>/prep</code></td><td><code>prep</code></td></tr>
@@ -438,13 +439,14 @@ const KB = {
 
 <h2>Where Each One Lives</h2>
 <ul>
-  <li><strong>Resume + ATS + Cover Letter</strong> is also available from the CLI (<code>python3 apply.py --job jobs/job.txt --company … --role …</code>) — see <a href="#" onclick="showArticle('gs-first-run')">Running Your First Application</a></li>
+  <li><strong>Master Resume Builder</strong> is web-only — no Slack or Teams command. It's not tied to a tracked application, so it doesn't fit either bot's "pick an application first" pattern. See <a href="#" data-kb-link="res-builder">Master Resume Builder</a></li>
+  <li><strong>Resume + ATS + Cover Letter</strong> is also available from the CLI (<code>python3 apply.py --job jobs/job.txt --company … --role …</code>) — see <a href="#" data-kb-link="gs-first-run">Running Your First Application</a></li>
   <li><strong>Rescore</strong> lives on the Application Tracker, not the Agent tab — it's a property of a tracked application, not a standalone document generator</li>
   <li>Every other agent is a tab in the <strong>Agent</strong> section of the web app, and a matching command in both the Slack and Teams bots</li>
 </ul>
 
 <h2>Digging Deeper</h2>
-<p>See <a href="#" onclick="showArticle('gs-overview')">How the Agent Works</a> for the resume/ATS/cover-letter 8-step workflow, <a href="#" onclick="showArticle('wf-web-app')">Using the Web App</a> for how prep/AQ/thank-you/optimize work in the browser, and the <strong>Slack Integration</strong> / <strong>Teams Integration</strong> categories for exact chat-command syntax.</p>
+<p>See <a href="#" data-kb-link="gs-overview">How the Agent Works</a> for the resume/ATS/cover-letter 8-step workflow, <a href="#" data-kb-link="wf-web-app">Using the Web App</a> for how prep/AQ/thank-you/optimize work in the browser, and the <strong>Slack Integration</strong> / <strong>Teams Integration</strong> categories for exact chat-command syntax.</p>
       `
     },
     {
@@ -854,6 +856,53 @@ const KB = {
       `
     },
     {
+      id: 'res-builder',
+      category: 'resume',
+      title: 'Master Resume Builder',
+      snippet: 'Building resumes/master.docx from scratch — templates, structured job/education input, and the optional AI polish pass.',
+      readTime: '4 min',
+      body: `
+<h2>What It's For</h2>
+<p>Every other agent starts from an existing <code>master.docx</code>. If you don't have one yet, the <strong>Build Master Resume</strong> card on the Agent tab builds one from scratch — no job description involved, no tracked application required. It auto-expands the first time you visit the Agent tab with no resume on file.</p>
+
+<h2>Templates</h2>
+<table>
+  <tr><th>Template</th><th>Best for</th></tr>
+  <tr><td><strong>Technical / ATS-Clean</strong></td><td>Integration, platform, and AI/agent engineering roles</td></tr>
+  <tr><td><strong>Traditional / Chronological</strong></td><td>Professional services, TAM, and customer success roles</td></tr>
+  <tr><td><strong>Executive / Leadership</strong></td><td>Senior, staff, and leadership roles — polished header, competency grid</td></tr>
+</table>
+
+<h2>What You Fill In</h2>
+<ul>
+  <li><strong>Header</strong> — Full Name, Email (required), Phone, Location (autocomplete), LinkedIn, Website/Portfolio</li>
+  <li><strong>Professional Summary</strong> — optional; the AI drafts one from your other answers if you leave it blank and polish is on</li>
+  <li><strong>Jobs</strong> — up to 15, each with company, title, location, start/end month+year (or a "Current role" checkbox), and up to 15 bullets</li>
+  <li><strong>Education</strong> — up to 10 entries: degree, institution (autocomplete), location, graduation year</li>
+  <li><strong>Certifications</strong> — up to 20: name, issuer, year</li>
+  <li><strong>Skills</strong> — one per line, up to 60</li>
+</ul>
+<p>Location and institution fields use the same debounced autocomplete as the rest of the app — typed free text is always accepted even if nothing matches. At minimum, you need either one job with a company, title, and bullet, or one education entry with a degree and institution.</p>
+
+<h2>The AI Polish Pass</h2>
+<p>"Polish my wording with AI" is checked by default. It's one Claude call that tightens grammar and phrasing, swaps in stronger active verbs, and bans openers like "Responsible for" or "Helped to" — it does <strong>not</strong> invent companies, titles, numbers, tools, or achievements you didn't already provide. If the polish call fails for any reason, your original unpolished text is used instead — you always get a resume out of this, polished or not.</p>
+
+<h2>If You Already Have a Master Resume</h2>
+<p>Submitting when one already exists doesn't overwrite it silently — you'll be asked to confirm: <em>"You already have a master resume on file. Replace it with this new one? Your current resume will be saved as a backup you can download or restore from your Profile page."</em> Confirming replaces it; your prior resume becomes the "previous version" described in <a href="#" data-kb-link="wf-profile-guide">Building Your Profile &amp; Voice Guide</a>.</p>
+<p>Admin accounts cannot run this agent at all — it's a job-seeker feature, not something an admin account needs.</p>
+
+<h2>Output</h2>
+<p>The build streams progress live (same SSE pattern as every other agent) and produces a single file, always named <code>master.docx</code>, saved directly as your live master resume. From there, it's ready for the tailoring agent to use on your next application.</p>
+
+<h2>If Something Goes Wrong</h2>
+<ul>
+  <li>Missing required fields, or exceeding a limit (jobs/bullets/education/certs/skills) — the form blocks submission and tells you which</li>
+  <li>Too many runs already in flight — wait for an existing one to finish before starting another</li>
+  <li>Connection lost mid-stream — the run may still be processing server-side even though the live log stopped updating; check back before restarting</li>
+</ul>
+      `
+    },
+    {
       id: 'res-xml',
       category: 'admin',
       title: 'XML Editing — How It Works',
@@ -1185,6 +1234,40 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
       `
     },
     {
+      id: 'wf-tracker',
+      category: 'workflow',
+      title: 'Using the Application Tracker',
+      snippet: 'The tracking.html screen itself — filters, status/match pills, the detail drawer, comments, linked runs, and JD extraction.',
+      readTime: '4 min',
+      body: `
+<h2>What It's For</h2>
+<p><code>/tracking.html</code> is the web equivalent of the Slack/Teams tracker commands — a filterable, sortable list of every application you're tracking, with a detail view for comments, linked runs, and match scoring. It's the same <code>/api/applications</code> data either surface reads and writes.</p>
+
+<h2>The List</h2>
+<p>Each row shows Company (with logo), Role, Status, Match score, and a date column you can switch between Updated / Created / Applied. Click any column header to sort by it. A stats bar across the top totals Interviewing, Applied, Offers, and Rejected counts.</p>
+<p><strong>Filters:</strong> a search box (company, role, or domain), a Status pill row (Interviewing, Phone Screen, Applied, Researching, On Hold, Offer, Rejected, No Response, Not Applying), a Match pill row (Strong Match, Good Match, Stretch, Long Shot, Not Scored), and a DUA pill row (Filed / Not Filed). "✕ Clear" resets everything.</p>
+
+<h2>Adding &amp; Editing</h2>
+<p>A slide-out drawer handles both. Company Name and Role Title are required (with company-name autocomplete pulling a logo); everything else is optional — status, date applied, job source, location/remote, salary range, posting URL, a "reported to unemployment (DUA)" checkbox, and recruiter name/email. New applications open straight into edit mode; existing ones open read-only with an Edit button.</p>
+
+<h2>Comments</h2>
+<p>The same drawer has a Notes &amp; Comments section — add one from a textarea, edit any comment inline via its pencil icon, or delete one via its trash icon (no confirmation prompt on delete).</p>
+
+<h2>Linked Runs</h2>
+<p>Every agent run you generate against a tracked application (resume, prep, optimize, thank-you, etc.) links itself to that application automatically — the tracker has no manual "link a run" control, only an unlink (✕) on each run chip in the drawer. Each chip shows the run type, folder name, when it was linked, and a link straight to the Drive folder.</p>
+
+<h2>Creating a Drive Folder &amp; Capturing the JD</h2>
+<p>The ⊕ icon on a row ("Create Drive folder — attempts JD capture from URL") kicks off a small pipeline: create the Drive folder, try to extract the job description from the posting URL, then run match scoring — all shown live in a progress modal with a pending/running/done/failed state per step. Once a folder exists, that same icon becomes a direct "📁 Go to Drive folder" link.</p>
+<p><strong>If JD extraction fails</strong> (common for LinkedIn and other login-walled postings), the modal reveals a paste box right there — drop in the job description text and hit "Save &amp; continue" to finish the pipeline manually. You can also close the modal and let it keep running in the background ("Continue in background").</p>
+
+<h2>Score / Rescore</h2>
+<p>The Match column doubles as the scoring control — a badge shows the score and category (or "Not scored"), with a Score/Rescore button next to it. If you click it before a JD exists, it automatically runs the Drive-folder-and-JD-capture flow first, then scores.</p>
+
+<h2>What's Not Here</h2>
+<p>No CSV export and no bulk actions on this page today — those exist for admins on the equivalent Applications tab in <a href="#" data-kb-link="admin-dashboard">the Admin Dashboard</a>, but not here. Calendar events aren't shown in this drawer either — interviews and deadlines linked to an application live on the separate <a href="#" data-kb-link="wf-calendar">Calendar</a> page.</p>
+      `
+    },
+    {
       id: 'wf-calendar',
       category: 'workflow',
       title: 'Calendar',
@@ -1225,6 +1308,76 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
 
 <h2>Limits</h2>
 <p>1,000 events per user, 10 reminders per event, 20 linked run IDs per event, 200-character titles, 5,000-character notes.</p>
+      `
+    },
+    {
+      id: 'wf-profile-guide',
+      category: 'workflow',
+      title: 'Building Your Profile & Voice Guide',
+      snippet: 'The 6-step wizard on your Profile page — AI-suggested drafts, resume upload/restore, and how everything feeds the agents.',
+      readTime: '4 min',
+      body: `
+<h2>What It's For</h2>
+<p><code>/profile.html</code> holds your account settings and, most importantly, your <strong>Profile &amp; Voice Guide</strong> — the same <code>profile.md</code> every agent reads for voice, stories, and preferences before writing anything. A guided wizard builds it step by step; a raw markdown editor is available if you'd rather write it directly.</p>
+
+<h2>The 6 Steps</h2>
+<ol>
+  <li><strong>Identity</strong> — a 3–5 sentence paragraph on who you are professionally and what makes you different</li>
+  <li><strong>Contact</strong> — email (prefilled from your account), phone, location, LinkedIn</li>
+  <li><strong>Voice &amp; Tone</strong> — a DO list and a DON'T list of writing rules, prefilled with sensible defaults you can edit or extend</li>
+  <li><strong>Key Stories</strong> — repeatable cards: a title plus "what did you build/ship/deliver, and what was the measurable outcome?"</li>
+  <li><strong>Preferences</strong> — open to, target roles, strongest fit, not interested in</li>
+  <li><strong>Review</strong> — a rendered preview of the full guide before you save</li>
+</ol>
+<p>Step dots at the top jump directly to any step; Back/Next move sequentially.</p>
+
+<h2>AI-Suggested Drafts</h2>
+<p>Two steps have a "✨ Suggest" button (only shown if AI assistance is available for your account):</p>
+<ul>
+  <li><strong>Identity</strong> — "✨ Suggest a draft" writes an identity paragraph for you; if you already have text there, it confirms before overwriting</li>
+  <li><strong>Key Stories</strong> — "✨ Suggest stories from my resume" reads your uploaded resume and appends suggested story cards to whatever's already there (it doesn't replace existing stories)</li>
+</ul>
+
+<h2>Resume Upload &amp; Backup</h2>
+<p>The Master Resume card takes a <code>.docx</code> file — click to browse or drag-and-drop. Uploading replaces your current master resume, but the previous one isn't discarded: a "Previous version available" line appears with a direct download link and a "Restore this version" button, so an upload mistake or an unwanted <a href="#" data-kb-link="res-builder">Master Resume Builder</a> replacement is always reversible.</p>
+
+<h2>Password &amp; Notifications</h2>
+<p>Change Password takes your current password plus a new one (8 characters minimum) — no strength meter, just the minimum length. Email notification preferences are grouped into Time-Elapsed (researching nudge, follow-up reminder, gone-silent alert), Event-Triggered (status changed, new application added), and Digests (daily, weekly) — these toggles auto-save a few hundred milliseconds after you flip one, no separate save button needed.</p>
+
+<h2>What Saves Automatically vs. Not</h2>
+<p>Only the notification toggles auto-save. Your display name, the resume upload, and the Profile &amp; Voice Guide all use an explicit Edit → Save/Cancel pattern — Cancel discards your changes and restores what was there before.</p>
+      `
+    },
+    {
+      id: 'admin-dashboard',
+      category: 'admin',
+      title: 'Using the Admin Dashboard',
+      snippet: 'Walkthrough of all seven tabs on /admin.html — Users, Applications, Agent Runs, Event Logs, Webhooks, Knowledge Base, and Chat Logs.',
+      readTime: '5 min',
+      body: `
+<h2>Overview</h2>
+<p><code>/admin.html</code> is where admin accounts manage the whole system — every other user's account, applications, and activity, plus the Knowledge Base itself. It's organized into seven tabs, each with its own filters and a CSV/Excel export where noted below.</p>
+
+<h2>Users</h2>
+<p>Every account: name/email, role, app count, run count, email-verified status, and a toggleable Last Login / Joined date column. Filter by name/email search, role, verified status, or a date range; sort any column. The only row action is <strong>Edit</strong>, which opens a modal for display name, email, role (user/admin), active/deactivated status, the verified checkbox, and a "Resend Verification" button. There's no delete-user action from this tab.</p>
+
+<h2>Applications</h2>
+<p>Every tracked application across every user, with the same status filter chips as the user-facing tracker plus a user filter. Edit opens the full application detail (priority, dates, job source, salary, URL, DUA flag, recruiter, comments); Delete asks for confirmation first — this cannot be undone.</p>
+
+<h2>Agent Runs</h2>
+<p>Every run from every agent, filterable by type (Resume, Resume Builder, Optimize, App Questions, Interview Prep, Thank You, Match Score) and status (Completed, Failed, Running, Queued). Clicking a row opens a read-only detail drawer — identification, application, user, timing (with computed duration), output files/Drive link, and type-specific extras like the match score's reasoning or the optimize instruction that was given.</p>
+
+<h2>Event Logs</h2>
+<p>The full audit trail — timestamp, action, actor, affected user, source (user vs. application event), entity, IP, and a JSON details blob. Read-only; filter by event ID, actor, action, source, or a date-time range.</p>
+
+<h2>Webhooks</h2>
+<p>Create, edit, test, and monitor outbound webhooks. Each webhook has a name, endpoint URL, optional HMAC secret, a payload format (Generic JSON, Slack Incoming Webhook, MS Teams MessageCard, or Grafana Loki push), an active flag, an optional scope to a single user, a checkbox grid of subscribed events, delivery filters, and custom headers. Row actions: copy the URL, edit, <strong>Test</strong> (sends one delivery immediately and reports success/failure inline), <strong>Log</strong> (expands the last 25 deliveries with status/HTTP code/duration/error), and delete. See <a href="#" data-kb-link="wh-overview">Webhooks Overview</a> for the event types and payload formats in depth.</p>
+
+<h2>Knowledge Base</h2>
+<p>This is where every article you're reading right now is edited. A table of articles (title, category, read time, snippet, last updated) with a WYSIWYG/raw-HTML toggle editor for the body, plus a separate Categories table (label, icon, description, admin-only flag). <strong>"⟳ Seed from frontend"</strong> replaces everything currently stored with whatever is checked into <code>frontend/kb.html</code> — useful after this file changes, since the KB actually served to users is loaded from storage, not read live from this file.</p>
+
+<h2>Chat Logs</h2>
+<p>Transcripts of every conversation with the <a href="#" data-kb-link="admin-chatbot">KB support chatbot</a> — user, start/last-activity time, message count, and an escalation indicator. Check "Escalated only" to filter down to conversations that triggered a support email. Clicking a row opens the full transcript plus escalation details and a hint pointing you at the threaded email in your inbox to reply from directly.</p>
       `
     },
     {
@@ -1270,12 +1423,13 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
       readTime: '3 min',
       body: `
 <h2>Deployment</h2>
-<p>The app runs on <a href="https://fly.io" target="_blank">Fly.io</a> with two machines:</p>
+<p>The app runs on <a href="https://fly.io" target="_blank">Fly.io</a> with three machines (process groups):</p>
 <ul>
   <li><strong>web</strong> — serves the frontend and FastAPI API (<code>api.py</code>), handles SSE streaming; the Microsoft Teams bot is also mounted directly onto this process via <code>routers/teams.py</code> (<code>POST /api/messages</code>) — it is not a separate machine</li>
   <li><strong>bot</strong> — runs the Slack bot (<code>slack_bot.py</code>, Socket Mode) and background async processing</li>
+  <li><strong>testrunner</strong> — runs <code>test_runner_bot.py</code>, a standalone Slack app (its own bot token/app) exposing <code>/run-tests</code> and <code>/test-status</code>, restricted to a single Slack user ID. Kept separate because the main bot is at Slack's 25-command limit</li>
 </ul>
-<p>Both machines are scaled to 1. The web machine must stay at 1 because SSE state is in-memory — scaling to 2 without a shared event bus would lose events for requests routed to the wrong machine.</p>
+<p>All three machines are scaled to 1. The web machine must stay at 1 because SSE state is in-memory — scaling to 2 without a shared event bus would lose events for requests routed to the wrong machine.</p>
 
 <h2>Storage</h2>
 <ul>
@@ -1305,6 +1459,67 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
 
 <h2>Email Notifications</h2>
 <p>A background scan runs every hour to send nudge and follow-up reminder emails for applications in the <em>Researching</em> and <em>Applied</em> statuses. Emails contain signed one-time action links — clicking a link directly updates the application status or snoozes further reminders, no login required.</p>
+      `
+    },
+    {
+      id: 'admin-api-docs',
+      category: 'admin',
+      title: 'API Reference (api-docs.html)',
+      snippet: 'What the /api-docs.html page is, where its data comes from, and who can see it.',
+      readTime: '2 min',
+      body: `
+<h2>What It Is</h2>
+<p><code>/api-docs.html</code> is a browsable, read-only rendering of <code>JobApply.postman_collection.json</code> — every endpoint, method, headers, and example bodies, organized into the same folders as the Postman collection (Auth, Profile, Application Tracker, Application Runs, Google Drive, Model Config, Admin, and so on) with a sidebar filter and scroll-spy navigation.</p>
+
+<h2>Where the Data Comes From</h2>
+<p>The page fetches <code>GET /api/postman</code> on load, which reads the collection file live off disk — so it reflects whatever's currently checked into the repo. If that fetch fails or times out, it falls back to a snapshot of the collection embedded in the page at build time, so the reference is never blank even if the live fetch has a problem. A "⬇ Postman" link downloads the same file for import into the Postman app.</p>
+
+<h2>What It Isn't</h2>
+<p>There's no "try it" button and no auth flow — you can't fire requests from this page. It's documentation only.</p>
+
+<h2>Who Can See It</h2>
+<p>Any logged-in user, technically — it's not role-gated server-side. In practice it's only linked from the admin panel and the Knowledge Base's admin-only header icons, so regular users won't stumble onto it, but a direct link works for anyone with a session.</p>
+      `
+    },
+    {
+      id: 'admin-chatbot',
+      category: 'admin',
+      title: 'Support Chatbot & Chat Logs',
+      snippet: 'The Chainlit-powered help widget on every page — how it answers from the Knowledge Base, when it escalates to email, and where transcripts live.',
+      readTime: '3 min',
+      body: `
+<h2>The Widget</h2>
+<p>A floating chat widget (Chainlit's Copilot) sits on every authenticated page — Agent, Tracker, Admin, Profile, Calendar, API Reference, and (behind a login check) the Knowledge Base itself. It's mounted in-process on the same web machine as the rest of the app, at <code>/chat</code> — no separate Fly process.</p>
+
+<h2>What It Knows</h2>
+<p>The bot's only source of truth is the Knowledge Base — visible articles are filtered by the same admin-only rule as <code>/kb.html</code> (an admin-only article never reaches a regular user's chat session) and stuffed into the system prompt fresh at the start of each conversation. There's no separate vector store to fall out of sync. Admin sessions additionally get the full architecture/deployment reference material that regular users don't see.</p>
+
+<h2>When It Escalates</h2>
+<p>If the bot can't answer from the Knowledge Base, or the user reports a bug or leaves feedback, it has a tool it can call to flag the conversation for follow-up. Before escalating a bug report or unanswerable question, it asks one short clarifying question first (what page, is it reproducible, any error text or screenshot) — straightforward feedback skips that. Escalating sends an email with the reason, a summary, and the conversation transcript so far, with the reply-to address set to the user's own email — replying from the team inbox reaches them directly, and repeated escalations in the same session thread into one email. This is rate-limited separately from general chat use.</p>
+<p>Screenshots or files attached mid-chat are forwarded as email attachments on escalation and passed to Claude as vision input, so it can actually see what was attached.</p>
+
+<h2>Chat Logs</h2>
+<p>Every conversation is saved and viewable admin-only via the <strong>Chat Logs</strong> tab in <a href="#" data-kb-link="admin-dashboard">the Admin Dashboard</a> — full transcript, any escalations, and (for escalated conversations) a hint pointing at the threaded notification email to reply from.</p>
+      `
+    },
+    {
+      id: 'admin-model-config',
+      category: 'admin',
+      title: 'Switching the Active Model',
+      snippet: 'The Claude model every agent runs on, how to change it, and where it shows up as a badge across the app.',
+      readTime: '2 min',
+      body: `
+<h2>What It Controls</h2>
+<p>One model name is shared by every agent — resume tailoring, application questions, interview prep, thank-you emails, optimize, scoring, and the master resume builder's polish pass all read the same active model at request time. There's no per-agent override today.</p>
+
+<h2>Changing It</h2>
+<p>Reading the active model just requires being logged in, but changing it or listing the allowed models is admin-only. There's no UI for this yet — it's an API/Postman-only operation. The allow-list is a fixed set of current Claude models (Opus, Sonnet, and Haiku variants); anything outside that list is rejected.</p>
+
+<h2>Taking Effect</h2>
+<p>The active model is stored centrally (not in memory on a single machine), so a change applies immediately to the very next run or agent call, on either the web or bot process, with no redeploy needed.</p>
+
+<h2>Where You See It</h2>
+<p>A small badge with a sparkle icon shows the current model name on the Agent, Tracker, Calendar, Profile, and Admin pages. It's read-only display everywhere — even admins don't change it from the badge, only via the API.</p>
       `
     },
 
@@ -1641,7 +1856,7 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
   <li>Reminder channels — Email, Slack DM, or both</li>
   <li>Reminder timing — any lead time up to 1 year before, up to 10 reminders per event</li>
 </ul>
-<p>See the <a href="#" onclick="showArticle('wf-calendar')">Calendar</a> article for the full list of event types and how reminders and application/run linking work.</p>
+<p>See the <a href="#" data-kb-link="wf-calendar">Calendar</a> article for the full list of event types and how reminders and application/run linking work.</p>
 
 <h2>/cal-view</h2>
 <p>Opens a read-only detail modal for a selected event. Shows all fields including reminder configuration and any notes added at creation.</p>
@@ -1677,7 +1892,7 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
   <tr><td><code>/profile-guide</code></td><td>Edit your profile &amp; voice guide (the <code>profile.md</code> content) via a large text modal</td></tr>
   <tr><td><code>/notifications</code></td><td>View and toggle email notification preferences — researching nudge, follow-up reminder, gone silent, status changed, new application, daily digest, weekly digest</td></tr>
 </table>
-<p>See the <a href="#" onclick="showArticle('wf-email-notifications')">Notifications</a> article for exact thresholds, delivery timing, and the one-click action links included in each email.</p>
+<p>See the <a href="#" data-kb-link="wf-email-notifications">Notifications</a> article for exact thresholds, delivery timing, and the one-click action links included in each email.</p>
 
 <p>To change your display name, email, or password, use the <a href="/profile.html">Profile page</a> in the web app.</p>
 
@@ -1801,7 +2016,7 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
 
 <h2>Email Reminders Only</h2>
 <p>Teams' <code>cal add</code> simplifies Slack's reminder-channel choice down to a single "Email reminder" toggle — there's no Teams-side reminder delivery channel implemented server-side to pair with a chat notification.</p>
-<p>See the <a href="#" onclick="showArticle('wf-calendar')">Calendar</a> article for the full list of event types and how reminders and application/run linking work.</p>
+<p>See the <a href="#" data-kb-link="wf-calendar">Calendar</a> article for the full list of event types and how reminders and application/run linking work.</p>
       `
     },
     {
@@ -1830,7 +2045,7 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
 <p>Edit your profile &amp; voice guide (the <code>profile.md</code> content).</p>
 
 <h2>notifications</h2>
-<p>View and toggle email notification preferences — researching nudge, follow-up reminder, gone silent, status changed, new application, daily digest, weekly digest. See the <a href="#" onclick="showArticle('wf-email-notifications')">Notifications</a> article for exact thresholds and delivery timing.</p>
+<p>View and toggle email notification preferences — researching nudge, follow-up reminder, gone silent, status changed, new application, daily digest, weekly digest. See the <a href="#" data-kb-link="wf-email-notifications">Notifications</a> article for exact thresholds and delivery timing.</p>
 
 <h2>help</h2>
 <p>Posts the full command reference.</p>
@@ -1849,7 +2064,7 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
 <p>A <code>content.replace(old, new, 1)</code> call returns 0 replacements, meaning the <code>old</code> string was not found in the XML. The document ships with unedited content.</p>
 
 <h2>Root Cause — Almost Always</h2>
-<p>The <code>old</code> search string was derived from pandoc output rather than the raw XML. See <a href="#" onclick="showArticle('res-xml')">XML Editing — How It Works</a> for why pandoc output doesn't match the raw XML.</p>
+<p>The <code>old</code> search string was derived from pandoc output rather than the raw XML. See <a href="#" data-kb-link="res-xml">XML Editing — How It Works</a> for why pandoc output doesn't match the raw XML.</p>
 
 <h2>Debugging Steps</h2>
 <ol>
@@ -2000,7 +2215,7 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
       readTime: '4 min',
       body: `
 <h2>Seven Types, Three Groups</h2>
-<p>Notification preferences live per-user (<code>PUT /api/profile</code> with a <code>notification_prefs</code> map) and default to <strong>on</strong>. All are email-only via Resend — there's no per-type Slack/Teams channel choice (that's a <a href="#" onclick="showArticle('wf-calendar')">Calendar</a> reminder feature, not this system).</p>
+<p>Notification preferences live per-user (<code>PUT /api/profile</code> with a <code>notification_prefs</code> map) and default to <strong>on</strong>. All are email-only via Resend — there's no per-type Slack/Teams channel choice (that's a <a href="#" data-kb-link="wf-calendar">Calendar</a> reminder feature, not this system).</p>
 
 <table>
   <tr><th>Group</th><th>Type</th><th>Trigger</th></tr>
@@ -2035,8 +2250,8 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
 
 <h2>Not to Be Confused With</h2>
 <ul>
-  <li><a href="#" onclick="showArticle('wf-calendar')">Calendar reminders</a> — per-event email/Slack DM reminders you configure per calendar event, a separate system</li>
-  <li><a href="#" onclick="showArticle('wh-overview')">Webhooks</a> — admin-configured outbound event streaming to Slack, Teams, Grafana Loki, or a custom endpoint; fires on every audit action, not tied to a specific user's inbox</li>
+  <li><a href="#" data-kb-link="wf-calendar">Calendar reminders</a> — per-event email/Slack DM reminders you configure per calendar event, a separate system</li>
+  <li><a href="#" data-kb-link="wh-overview">Webhooks</a> — admin-configured outbound event streaming to Slack, Teams, Grafana Loki, or a custom endpoint; fires on every audit action, not tied to a specific user's inbox</li>
 </ul>
       `
     },
@@ -2202,6 +2417,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   buildHomeCards();
   setupSearch();
   setupTheme();
+
+  // Cross-reference links inside article bodies use data-kb-link (not onclick —
+  // DOMPurify strips inline event handler attributes when sanitizing article HTML,
+  // so an onclick attribute there would silently never fire).
+  document.getElementById('articleBody').addEventListener('click', (e) => {
+    const link = e.target.closest('a[data-kb-link]');
+    if (!link) return;
+    e.preventDefault();
+    showArticle(link.dataset.kbLink);
+  });
 
   // Deep-link via hash
   const hash = location.hash.slice(1);
