@@ -124,7 +124,14 @@ in a loop if either 404s or redirects to login.
 and Socket Mode app token — see `TEST_RUNNER_BOT_TOKEN`/`TEST_RUNNER_SIGNING_SECRET`/
 `TEST_RUNNER_APP_TOKEN`), kept separate because the main bot is at Slack's
 25-command limit. Restricted to the single Slack user ID in
-`TEST_RUNNER_SLACK_USER_ID`. Two commands:
+`TEST_RUNNER_SLACK_USER_ID`. Unlike `web` and `bot`, its Fly machine is **not**
+always-on and has no auto-stop — start it manually before using it, and stop
+it manually when you're done to avoid leaving it running unnecessarily:
+```bash
+fly machine start <testrunner-machine-id> --app job-apply-corey
+fly machine stop  <testrunner-machine-id> --app job-apply-corey
+```
+Two commands:
 - `/run-tests [unit | api | slack | all | ui-anon | ui | ui-admin]` — runs the
   matching pytest suite in a background thread and streams a live-updating
   result message (one run at a time; a concurrency guard rejects overlapping
@@ -460,7 +467,7 @@ The app runs as **three process groups** on Fly.io (defined in `fly.toml`), each
 |---|---|---|---|
 | `web` | `uvicorn api:app …` | 1 GB, auto-stop | FastAPI web server — 1 machine required (SSE state is in-memory) |
 | `bot` | `python slack_bot.py` | 512 MB, always-on | Slack Socket Mode bot (needs Playwright/Chromium for UI tests) |
-| `testrunner` | `python test_runner_bot.py` | 512 MB, always-on | Standalone test-runner bot — separate Slack app, see [Test Runner Bot](#test-runner-bot) |
+| `testrunner` | `python test_runner_bot.py` | 512 MB, started manually | Standalone test-runner bot — separate Slack app, no auto-start/auto-stop; see [Test Runner Bot](#test-runner-bot) |
 
 > **Important:** Keep `web` scaled to exactly 1 machine. Run and prep state is held
 > in-memory; multiple web machines will cause SSE streams to 404 on the wrong instance.
