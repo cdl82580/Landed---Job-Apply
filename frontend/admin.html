@@ -1155,7 +1155,7 @@
   </div>
   <div class="drawer-body" id="chatLogDrawerBody"></div>
   <div class="drawer-footer">
-    <a class="btn hidden" id="chatLogReplyBtn" target="_blank" rel="noopener" style="text-decoration:none">Reply to user ↗</a>
+    <span class="hidden" id="chatLogReplyHint" style="font-size:.8125rem;color:var(--text-secondary)"></span>
     <button class="btn btn-ghost" id="chatLogDrawerCloseBtn">Close</button>
   </div>
 </div>
@@ -4224,14 +4224,13 @@ async function openChatLogDrawer(userId, convId) {
 
   document.getElementById('chatLogDrawerBody').innerHTML = html;
 
-  const replyBtn = document.getElementById('chatLogReplyBtn');
+  const replyHint = document.getElementById('chatLogReplyHint');
   const lastEscalation = (c.escalations || [])[c.escalations.length - 1];
-  if (lastEscalation && c.user_email) {
-    const subject = 'Re: ' + lastEscalation.email_subject;
-    replyBtn.href = `mailto:${encodeURIComponent(c.user_email)}?subject=${encodeURIComponent(subject)}`;
-    replyBtn.classList.remove('hidden');
+  if (lastEscalation) {
+    replyHint.textContent = `To reply, find "${lastEscalation.email_subject}" in your inbox — replying there goes straight to the user.`;
+    replyHint.classList.remove('hidden');
   } else {
-    replyBtn.classList.add('hidden');
+    replyHint.classList.add('hidden');
   }
 
   document.getElementById('chatLogDrawer').classList.add('open');
