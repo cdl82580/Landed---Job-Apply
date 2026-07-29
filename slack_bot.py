@@ -54,6 +54,7 @@ Slash commands handled:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -220,6 +221,21 @@ def _restrict_to_owner(body: dict, next):
         print(f"[slack_bot] ignored interaction from unauthorized user {caller}")
         return  # swallow — no next(), no response sent
     next()
+
+
+_log = logging.getLogger(__name__)
+
+
+def _error_text(action: str, exc: Exception | str) -> str:
+    """Generic chat-facing error message for a failed action — the real
+    exception is logged server-side instead of shown to the user. Bot error
+    messages that interpolate str(exc) directly can otherwise leak internal
+    detail (request URLs, HTTP response bodies) to anyone who can reach the
+    bot. Now that the bot is gated to a single owner (see
+    _restrict_to_owner above) the audience is smaller, but there's no reason
+    to keep showing raw internals to that one user either."""
+    _log.warning("%s: %s", action, exc, exc_info=True)
+    return f":x: {action}. Please try again — if it keeps happening, check the logs."
 
 
 # ---------------------------------------------------------------------------
@@ -509,7 +525,7 @@ def tracker_command(ack, respond):
     try:
         apps = _get_apps()
     except Exception as exc:
-        respond(f":x: Could not reach the tracker: {exc}")
+        respond(_error_text("Could not reach the tracker", exc))
         return
 
     counts: dict[str, int] = {s: 0 for s in VALID_STATUSES}
@@ -557,7 +573,7 @@ def track_list_command(ack, respond, body):
     try:
         apps = _get_apps(status=status_filter)
     except Exception as exc:
-        respond(f":x: Could not reach the tracker: {exc}")
+        respond(_error_text("Could not reach the tracker", exc))
         return
 
     if not apps:
@@ -854,7 +870,7 @@ def track_add_view_submit(ack, body, client, view):
             ),
         )
     except Exception as exc:
-        client.chat_postMessage(channel=channel, text=f":x: Failed to add application: {exc}")
+        client.chat_postMessage(channel=channel, text=_error_text("Failed to add application", exc))
 
 
 # ---------------------------------------------------------------------------
@@ -867,7 +883,7 @@ def track_update_command(ack, body, client, respond):
     try:
         options = _app_options()
     except Exception as exc:
-        respond(f":x: Could not load applications: {exc}")
+        respond(_error_text("Could not load applications", exc))
         return
     if not options:
         respond("No applications found. Use `/track-add` to create one.")
@@ -905,7 +921,7 @@ def track_update_select_submit(ack, body, client, view):
         a = _get_app(app_id)
     except Exception as exc:
         ack()
-        client.chat_postMessage(channel=channel, text=f":x: Could not load application: {exc}")
+        client.chat_postMessage(channel=channel, text=_error_text("Could not load application", exc))
         return
 
     def _sel_opt(val):
@@ -1091,7 +1107,7 @@ def track_update_edit_submit(ack, body, client, view):
             ),
         )
     except Exception as exc:
-        client.chat_postMessage(channel=channel, text=f":x: Failed to update: {exc}")
+        client.chat_postMessage(channel=channel, text=_error_text("Failed to update", exc))
 
 
 # ---------------------------------------------------------------------------
@@ -1104,7 +1120,7 @@ def track_note_command(ack, body, client, respond):
     try:
         options = _app_options()
     except Exception as exc:
-        respond(f":x: Could not load applications: {exc}")
+        respond(_error_text("Could not load applications", exc))
         return
 
     if not options:
@@ -1166,7 +1182,7 @@ def track_note_view_submit(ack, body, client, view):
             ),
         )
     except Exception as exc:
-        client.chat_postMessage(channel=channel, text=f":x: Failed to add note: {exc}")
+        client.chat_postMessage(channel=channel, text=_error_text("Failed to add note", exc))
 
 
 # ---------------------------------------------------------------------------
@@ -1179,7 +1195,7 @@ def track_delete_command(ack, body, client, respond):
     try:
         options = _app_options(active_only=False)  # allow deleting any record
     except Exception as exc:
-        respond(f":x: Could not load applications: {exc}")
+        respond(_error_text("Could not load applications", exc))
         return
 
     if not options:
@@ -1259,7 +1275,7 @@ def track_delete_confirm_submit(ack, body, client, view):
             ),
         )
     except Exception as exc:
-        client.chat_postMessage(channel=channel, text=f":x: Failed to delete: {exc}")
+        client.chat_postMessage(channel=channel, text=_error_text("Failed to delete", exc))
 
 
 # ---------------------------------------------------------------------------
@@ -1278,7 +1294,7 @@ def _start_apply_run(channel: str, client, company: str, role: str, contact: str
             run_id   = run_data["run_id"]
             status   = _poll_run(run_id)
         except Exception as exc:
-            client.chat_postMessage(channel=channel, text=f":x: Error starting run: {exc}")
+            client.chat_postMessage(channel=channel, text=_error_text("Error starting run", exc))
             return
 
         if status["status"] == "done":
@@ -1355,7 +1371,7 @@ def apply_select_view_submit(ack, body, client, view):
     try:
         record = _get_app(app_id)
     except Exception as exc:
-        ack(response_action="errors", errors={"app_block": f"Could not load application: {exc}"[:150]})
+        ack(response_action="errors", errors={"app_block": _error_text("Could not load application", exc)[:150]})
         return
 
     company     = record.get("company", "?")
@@ -1416,7 +1432,7 @@ def _start_prep_run(channel: str, client, company: str, role: str, round_type: s
             prep_id   = prep_data["prep_id"]
             status    = _poll_prep(prep_id)
         except Exception as exc:
-            client.chat_postMessage(channel=channel, text=f":x: Error starting prep: {exc}")
+            client.chat_postMessage(channel=channel, text=_error_text("Error starting prep", exc))
             return
 
         if status["status"] == "done":
@@ -1546,7 +1562,7 @@ def prep_select_view_submit(ack, body, client, view):
     try:
         record = _get_app(app_id)
     except Exception as exc:
-        ack(response_action="errors", errors={"app_block": f"Could not load application: {exc}"[:150]})
+        ack(response_action="errors", errors={"app_block": _error_text("Could not load application", exc)[:150]})
         return
 
     company     = record.get("company", "?")
@@ -1622,7 +1638,7 @@ def _start_aq_run(channel: str, client, company: str, role: str, question: str,
             # use the web app.
             status = _poll_aq(aq_id)
         except Exception as exc:
-            client.chat_postMessage(channel=channel, text=f":x: Error: {exc}")
+            client.chat_postMessage(channel=channel, text=_error_text("Error", exc))
             return
 
         if status["status"] == "done":
@@ -1728,7 +1744,7 @@ def aq_select_view_submit(ack, body, client, view):
     try:
         record = _get_app(app_id)
     except Exception as exc:
-        ack(response_action="errors", errors={"app_block": f"Could not load application: {exc}"[:150]})
+        ack(response_action="errors", errors={"app_block": _error_text("Could not load application", exc)[:150]})
         return
 
     company     = record.get("company", "?")
@@ -1893,7 +1909,7 @@ def thankyou_view_submit(ack, body, client, view):
             ty_id   = ty_data["ty_id"]
             status  = _poll_thankyou(ty_id)
         except Exception as exc:
-            client.chat_postMessage(channel=channel, text=f":x: Error: {exc}")
+            client.chat_postMessage(channel=channel, text=_error_text("Error", exc))
             return
 
         if status["status"] == "done":
@@ -1932,7 +1948,7 @@ def me_command(ack, respond):
         r.raise_for_status()
         u = r.json()
     except Exception as exc:
-        respond(f":x: Could not load account: {exc}")
+        respond(_error_text("Could not load account", exc))
         return
 
     header = f":bust_in_silhouette: {u.get('display_name') or u.get('email')}"
@@ -1958,7 +1974,7 @@ def runs_command(ack, respond):
         r.raise_for_status()
         runs = r.json().get("runs", [])
     except Exception as exc:
-        respond(f":x: Could not load runs: {exc}")
+        respond(_error_text("Could not load runs", exc))
         return
 
     if not runs:
@@ -2010,7 +2026,7 @@ def company_command(ack, respond, body):
         r.raise_for_status()
         results = r.json()
     except Exception as exc:
-        respond(f":x: Search failed: {exc}")
+        respond(_error_text("Search failed", exc))
         return
 
     if not results:
@@ -2048,7 +2064,7 @@ def track_view_command(ack, body, client, respond):
     try:
         options = _app_options()
     except Exception as exc:
-        respond(f":x: Could not load applications: {exc}")
+        respond(_error_text("Could not load applications", exc))
         return
 
     if not options:
@@ -2124,7 +2140,7 @@ def track_view_view_submit(ack, body, client, view):
         fallback = f"{a.get('company')} — {a.get('role_title')}\n" + "\n".join(lines)
         client.chat_postMessage(channel=channel, blocks=blocks, text=fallback)
     except Exception as exc:
-        client.chat_postMessage(channel=channel, text=f":x: Could not load application: {exc}")
+        client.chat_postMessage(channel=channel, text=_error_text("Could not load application", exc))
 
 
 # ---------------------------------------------------------------------------
@@ -2207,10 +2223,10 @@ def handle_message_with_file(body, client, logger):
         except Exception:
             detail = exc.response.text[:200] if exc.response is not None else ""
         logger.error(f"Resume upload failed: {exc} — detail: {detail}")
-        client.chat_postMessage(channel=user_id, text=f":x: Failed to save resume: {detail or exc}")
+        client.chat_postMessage(channel=user_id, text=_error_text("Failed to save resume", detail or exc))
     except Exception as exc:
         logger.error(f"Resume upload failed: {exc}")
-        client.chat_postMessage(channel=user_id, text=f":x: Failed to save resume: {exc}")
+        client.chat_postMessage(channel=user_id, text=_error_text("Failed to save resume", exc))
 
 
 @app.command("/profile-guide")
@@ -2268,7 +2284,7 @@ def profile_guide_submit(ack, body, client):
         r.raise_for_status()
         client.chat_postMessage(channel=user_id, text=":white_check_mark: Profile & voice guide saved.")
     except Exception as exc:
-        client.chat_postMessage(channel=user_id, text=f":x: Failed to save guide: {exc}")
+        client.chat_postMessage(channel=user_id, text=_error_text("Failed to save guide", exc))
 
 
 # ---------------------------------------------------------------------------
@@ -2372,7 +2388,7 @@ def optimize_view_submit(ack, body, client, view):
         try:
             record = _get_app(app_id)
         except Exception as exc:
-            client.chat_postMessage(channel=channel, text=f":x: Could not load application: {exc}")
+            client.chat_postMessage(channel=channel, text=_error_text("Could not load application", exc))
             return
 
         company = record.get("company", "?")
@@ -2407,7 +2423,7 @@ def optimize_view_submit(ack, body, client, view):
             r.raise_for_status()
             optimize_id = r.json()["optimize_id"]
         except Exception as exc:
-            client.chat_postMessage(channel=channel, text=f":x: Failed to start optimization: {exc}")
+            client.chat_postMessage(channel=channel, text=_error_text("Failed to start optimization", exc))
             return
 
         status = _poll_optimize(optimize_id)
@@ -2622,7 +2638,7 @@ def notifications_view_submit(ack, body, client, view):
             lines.append("*Off:* " + ", ".join(k.split(" —")[0] for k in disabled))
         client.chat_postMessage(channel=user_id, text="\n".join(lines))
     except Exception as exc:
-        client.chat_postMessage(channel=user_id, text=f":x: Failed to save preferences: {exc}")
+        client.chat_postMessage(channel=user_id, text=_error_text("Failed to save preferences", exc))
 
 
 # ---------------------------------------------------------------------------
@@ -2803,7 +2819,7 @@ def cal_today_command(ack, respond):
     try:
         events = _get_events(from_dt=from_dt, to_dt=to_dt)
     except Exception as exc:
-        respond(f":x: Could not load calendar: {exc}")
+        respond(_error_text("Could not load calendar", exc))
         return
 
     if not events:
@@ -2828,7 +2844,7 @@ def cal_week_command(ack, respond):
     try:
         events = _get_upcoming_events()
     except Exception as exc:
-        respond(f":x: Could not load calendar: {exc}")
+        respond(_error_text("Could not load calendar", exc))
         return
 
     if not events:
@@ -3066,7 +3082,7 @@ def cal_add_view_submit(ack, body, client, view):
             ),
         )
     except Exception as exc:
-        client.chat_postMessage(channel=channel, text=f":x: Failed to create event: {exc}")
+        client.chat_postMessage(channel=channel, text=_error_text("Failed to create event", exc))
 
 
 # ---------------------------------------------------------------------------
@@ -3079,7 +3095,7 @@ def cal_view_command(ack, body, client, respond):
     try:
         options = _cal_event_options()
     except Exception as exc:
-        respond(f":x: Could not load calendar: {exc}")
+        respond(_error_text("Could not load calendar", exc))
         return
 
     if not options:
@@ -3117,7 +3133,7 @@ def cal_view_view_submit(ack, body, client, view):
         r.raise_for_status()
         ev = r.json()
     except Exception as exc:
-        client.chat_postMessage(channel=channel, text=f":x: Could not load event: {exc}")
+        client.chat_postMessage(channel=channel, text=_error_text("Could not load event", exc))
         return
 
     type_label = EVENT_TYPE_LABELS.get(ev.get("event_type", ""), ev.get("event_type", "?"))
@@ -3151,7 +3167,7 @@ def cal_delete_command(ack, body, client, respond):
     try:
         options = _cal_event_options()
     except Exception as exc:
-        respond(f":x: Could not load calendar: {exc}")
+        respond(_error_text("Could not load calendar", exc))
         return
 
     if not options:
@@ -3218,7 +3234,7 @@ def cal_delete_confirm_submit(ack, body, client, view):
         _delete_cal_event(event_id)
         client.chat_postMessage(channel=channel, text=":wastebasket: Calendar event deleted.")
     except Exception as exc:
-        client.chat_postMessage(channel=channel, text=f":x: Failed to delete: {exc}")
+        client.chat_postMessage(channel=channel, text=_error_text("Failed to delete", exc))
 
 
 # ---------------------------------------------------------------------------
@@ -3707,7 +3723,7 @@ def run_tests_command(ack, body, respond, client):
                                text=blocks[0]["text"]["text"])
         except Exception as exc:
             client.chat_postMessage(channel=channel,
-                                    text=f":x: Could not update result message: {exc}")
+                                    text=_error_text("Could not update result message", exc))
 
     threading.Thread(target=_worker, daemon=True).start()
 

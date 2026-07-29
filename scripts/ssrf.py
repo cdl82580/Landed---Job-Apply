@@ -55,3 +55,80 @@ def is_ssrf_url(url: str) -> bool:
     except Exception:
         pass
     return False
+
+
+def resolve_safe_ip(url: str) -> str | None:
+    """Resolve url's hostname once and return a single safe IP to connect to,
+    or None if it doesn't resolve, isn't http(s), or any resolved address is
+    private/loopback/link-local/reserved/multicast/unspecified.
+
+    Pair this with post_pinned() so the exact address validated here is the
+    one actually connected to. A separate "check with is_ssrf_url(), then
+    let the HTTP client re-resolve and connect" two-step leaves a DNS-
+    rebinding gap: a short-TTL or multi-answer DNS response can return a
+    different (unvalidated) address on the second lookup moments later.
+    Resolving once and pinning the connection to that address closes it.
+    """
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return None
+        host  = parsed.hostname or ""
+        addrs = socket.getaddrinfo(host, None)
+        ips: list[str] = []
+        for _, _, _, _, sockaddr in addrs:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if _is_blocked_ip(ip):
+                return None
+            ips.append(sockaddr[0])
+        return ips[0] if ips else None
+    except Exception:
+        return None
+
+
+def _make_pinned_adapter(resolved_ip: str):
+    """Build a fresh requests.HTTPAdapter subclass instance that routes its
+    connection to resolved_ip instead of re-resolving the request's hostname,
+    while keeping the original hostname for the Host header and (for HTTPS)
+    TLS SNI + certificate hostname verification. A new instance per call —
+    never shared or mounted globally — so concurrent deliveries in other
+    threads can't race on which IP is pinned. This overrides
+    get_connection_with_tls_context(), requests' own documented extension
+    point for exactly this use case (see HTTPAdapter.build_connection_pool_key_attributes).
+    """
+    from requests.adapters import HTTPAdapter
+
+    class _PinnedIPAdapter(HTTPAdapter):
+        def send(self, request, **kwargs):
+            # Once host_params["host"] below is overridden to the pinned IP,
+            # urllib3 auto-derives the Host header from that same value —
+            # it would otherwise send "Host: <ip>" instead of the real
+            # hostname, breaking any name-based virtual hosting (Cloudflare,
+            # shared load balancers, etc.) on the other end.
+            request.headers.setdefault("Host", urllib.parse.urlparse(request.url).hostname)
+            return super().send(request, **kwargs)
+
+        def get_connection_with_tls_context(self, request, verify, proxies=None, cert=None):
+            host_params, pool_kwargs = self.build_connection_pool_key_attributes(request, verify, cert)
+            original_host = host_params.get("host")
+            host_params["host"] = resolved_ip
+            if host_params.get("scheme") == "https":
+                pool_kwargs["assert_hostname"] = original_host
+                pool_kwargs["server_hostname"] = original_host
+            return self.poolmanager.connection_from_host(**host_params, pool_kwargs=pool_kwargs)
+
+    return _PinnedIPAdapter()
+
+
+def post_pinned(url: str, resolved_ip: str, **kwargs):
+    """requests.post(url, **kwargs), but the connection is made directly to
+    resolved_ip instead of re-resolving url's hostname — see resolve_safe_ip()."""
+    import requests
+    session = requests.Session()
+    adapter = _make_pinned_adapter(resolved_ip)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    try:
+        return session.post(url, **kwargs)
+    finally:
+        session.close()

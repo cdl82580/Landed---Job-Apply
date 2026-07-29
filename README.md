@@ -60,7 +60,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 ### Security
 - `Strict-Transport-Security`, `X-Frame-Options`, `X-Content-Type-Options`, `Content-Security-Policy`, `Referrer-Policy` on every response
 - Rate limiting on login (10/min), register (5/hr), resend-verification (3/hr), change-password (5/hr), change-email (5/hr), resume-upload (10/hr), forgot-password (3/hr), reset-password (5/hr), company search (30/min)
-- SSRF guard on webhook URLs (DNS resolution + private-net check, shared via `scripts/ssrf.py`), re-applied at delivery time; outbound webhook delivery does not follow redirects
+- SSRF guard on webhook URLs (DNS resolution + private-net check, shared via `scripts/ssrf.py`), re-applied at delivery time. Delivery pins the connection to the exact IP that resolution validated (`resolve_safe_ip()` + `post_pinned()`) instead of letting the HTTP client re-resolve independently, closing the DNS-rebinding gap a separate check-then-connect step would leave open; outbound webhook delivery does not follow redirects. Admin-supplied custom headers can't set `Host` (domain-fronting)
 - Webhook HMAC secrets encrypted at rest with AES-256-GCM (key derived from `SESSION_SECRET`; fails fast if unset)
 - `safeHref()`/`esc()` applied to all user-supplied URLs and text rendered as `href`/`src`/`innerHTML` in the frontend; KB article HTML sanitized client-side with DOMPurify (`frontend/dompurify.min.js`) before rendering
 - Password-reset tokens are single-use (bound to a password-hash fingerprint at issuance; invalidated the moment the password changes)
@@ -84,7 +84,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - Delivery filters: actor (email/user ID), source, action category, application ID
 - HMAC-SHA256 signing (`X-Hub-Signature-256`) for receiver verification; secret encrypted at rest
 - Per-webhook delivery history (last 25), stats, test button
-- SSRF guard re-applied at delivery time (DNS rebinding protection)
+- SSRF guard re-applied at delivery time, with the delivery connection pinned to the exact resolved IP (DNS rebinding protection — see Security section above)
 
 ### Knowledge Base
 - Public KB at `/kb.html` — searchable article library with category sidebar; articles rendered from HTML body (Quill output)

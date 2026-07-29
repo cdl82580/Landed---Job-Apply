@@ -513,7 +513,9 @@ class TestSubmitApply:
              patch("api_client.post_run", side_effect=Exception("network down")), \
              patch.object(bot_module.JobApplyBot, "_proactive_message") as mock_proactive:
             await bot._submit_apply(ctx, {"company": "Acme", "role": "Eng", "job_posting": "JD"}, user)
-        assert "Error starting run: network down" in mock_proactive.call_args[0][2]
+        msg = mock_proactive.call_args[0][2]
+        assert "Error starting run" in msg
+        assert "network down" not in msg  # raw exception text must not reach the chat
 
 
 # ── _submit_prep (threaded) ────────────────────────────────────────────────
@@ -577,7 +579,9 @@ class TestSubmitPrep:
             await bot._submit_prep(
                 ctx, {"company": "Acme", "role": "Eng", "round_type": "technical", "job_posting": "JD"}, user,
             )
-        assert "Error: network down" in mock_proactive.call_args[0][2]
+        msg = mock_proactive.call_args[0][2]
+        assert "Error" in msg
+        assert "network down" not in msg  # raw exception text must not reach the chat
 
 
 # ── _submit_aq (threaded) ──────────────────────────────────────────────────
@@ -642,7 +646,9 @@ class TestSubmitAq:
             await bot._submit_aq(
                 ctx, {"company": "Acme", "role": "Eng", "question": "Why us?", "job_posting": "JD"}, user,
             )
-        assert "Error: network down" in mock_proactive.call_args[0][2]
+        msg = mock_proactive.call_args[0][2]
+        assert "Error" in msg
+        assert "network down" not in msg  # raw exception text must not reach the chat
 
 
 # ── _submit_thankyou (threaded) ────────────────────────────────────────────
@@ -708,7 +714,9 @@ class TestSubmitThankyou:
             await bot._submit_thankyou(
                 ctx, {"company": "Acme", "role": "Eng", "round_type": "onsite", "job_posting": "JD"}, user,
             )
-        assert "Error: network down" in mock_proactive.call_args[0][2]
+        msg = mock_proactive.call_args[0][2]
+        assert "Error" in msg
+        assert "network down" not in msg  # raw exception text must not reach the chat
 
 
 # ── _submit_optimize (threaded) ────────────────────────────────────────────
@@ -830,7 +838,9 @@ class TestSubmitOptimize:
              patch("api_client.post_optimize", side_effect=Exception("network down")), \
              patch.object(bot_module.JobApplyBot, "_proactive_message") as mock_proactive:
             await bot._submit_optimize(ctx, {"app_id": "app-001", "instruction": "tighten it up"}, user)
-        assert "Error: network down" in mock_proactive.call_args[0][2]
+        msg = mock_proactive.call_args[0][2]
+        assert "Error" in msg
+        assert "network down" not in msg  # raw exception text must not reach the chat
 
 
 # ── _submit_rescore (threaded) ─────────────────────────────────────────────

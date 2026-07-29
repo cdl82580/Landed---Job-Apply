@@ -9,8 +9,8 @@ class TestSSRFGuard:
 
     @pytest.fixture(autouse=True)
     def import_fn(self):
-        from scripts.webhooks import _is_ssrf_url
-        self.is_ssrf = _is_ssrf_url
+        from scripts.ssrf import is_ssrf_url
+        self.is_ssrf = is_ssrf_url
 
     # ── Should block ──────────────────────────────────────────────────────────
 
@@ -35,6 +35,17 @@ class TestSSRFGuard:
     def test_loopback_ipv6(self):
         assert self.is_ssrf("http://[::1]/hook") is True
 
+    def test_cgnat_block(self):
+        # 100.64.0.0/10 (RFC 6598) — ipaddress.is_private returns False for
+        # this range, so it needs an explicit check beyond the stdlib flags.
+        assert self.is_ssrf("http://100.64.0.1/hook") is True
+
+    def test_ipv4_mapped_ipv6_loopback_block(self):
+        assert self.is_ssrf("http://[::ffff:127.0.0.1]/hook") is True
+
+    def test_ipv4_mapped_ipv6_link_local_block(self):
+        assert self.is_ssrf("http://[::ffff:169.254.169.254]/hook") is True
+
     def test_file_scheme(self):
         # file:// resolves to loopback / private — blocked by host check
         # (guard resolves the hostname; file:// has no valid public host)
@@ -55,6 +66,31 @@ class TestSSRFGuard:
 
     def test_public_http(self):
         assert self.is_ssrf("http://example.com/webhook") is False
+
+
+class TestResolveSafeIp:
+    """resolve_safe_ip() backs post_pinned() — the delivery-time DNS-rebinding
+    fix. It must reject the same things is_ssrf_url() does, resolving once."""
+
+    @pytest.fixture(autouse=True)
+    def import_fn(self):
+        from scripts.ssrf import resolve_safe_ip
+        self.resolve = resolve_safe_ip
+
+    def test_blocks_loopback(self):
+        assert self.resolve("http://127.0.0.1/hook") is None
+
+    def test_blocks_cgnat(self):
+        assert self.resolve("http://100.64.0.1/hook") is None
+
+    def test_rejects_non_http_scheme(self):
+        assert self.resolve("ftp://example.com/hook") is None
+
+    def test_returns_a_valid_ip_for_a_public_host(self):
+        import ipaddress
+        ip = self.resolve("https://example.com/")
+        assert ip is not None
+        ipaddress.ip_address(ip)  # raises ValueError if not a valid IP literal
 
 
 class TestSecretEncryption:

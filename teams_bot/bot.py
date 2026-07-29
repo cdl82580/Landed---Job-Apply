@@ -68,6 +68,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import threading
 from datetime import datetime, timezone
@@ -89,6 +90,19 @@ from botbuilder.schema import (
 from botbuilder.schema.teams import FileDownloadInfo
 
 import api_client
+
+_log = logging.getLogger(__name__)
+
+
+def _error_text(action: str, exc: Exception) -> str:
+    """Generic chat-facing error message for a failed action — the real
+    exception is logged server-side instead of shown to the user. Bot error
+    messages that interpolate str(exc) directly can otherwise leak internal
+    detail (request URLs, HTTP response bodies) to anyone who can reach the
+    bot."""
+    _log.warning("%s: %s", action, exc, exc_info=True)
+    return f"❌ {action}. Please try again — if it keeps happening, let Corey know."
+
 
 # Attachment content type Teams uses for a file the user just shared in a
 # personal chat (see https://learn.microsoft.com/microsoftteams/platform/bots/how-to/bots-filesv4).
@@ -518,7 +532,7 @@ class JobApplyBot(ActivityHandler):
             status = await asyncio.to_thread(api_client.teams_link_status, aad_object_id)
         except Exception as exc:
             await turn_context.send_activity(
-                MessageFactory.text(f"❌ Could not check your account link: {exc}")
+                MessageFactory.text(_error_text("Could not check your account link", exc))
             )
             return None
 
@@ -529,7 +543,7 @@ class JobApplyBot(ActivityHandler):
             email = await self._teams_email(turn_context)
         except Exception as exc:
             await turn_context.send_activity(
-                MessageFactory.text(f"❌ Could not look up your Teams profile: {exc}")
+                MessageFactory.text(_error_text("Could not look up your Teams profile", exc))
             )
             return None
 
@@ -544,7 +558,7 @@ class JobApplyBot(ActivityHandler):
             lookup = await asyncio.to_thread(api_client.teams_account_lookup, email)
         except Exception as exc:
             await turn_context.send_activity(
-                MessageFactory.text(f"❌ Error checking your account: {exc}")
+                MessageFactory.text(_error_text("Error checking your account", exc))
             )
             return None
 
@@ -594,7 +608,7 @@ class JobApplyBot(ActivityHandler):
             email = await self._teams_email(turn_context)
         except Exception as exc:
             await turn_context.send_activity(
-                MessageFactory.text(f"❌ Could not look up your Teams profile: {exc}")
+                MessageFactory.text(_error_text("Could not look up your Teams profile", exc))
             )
             return
 
@@ -607,7 +621,7 @@ class JobApplyBot(ActivityHandler):
         try:
             result = await asyncio.to_thread(api_client.teams_link_confirm, aad_object_id, email)
         except Exception as exc:
-            await turn_context.send_activity(MessageFactory.text(f"❌ Error linking your account: {exc}"))
+            await turn_context.send_activity(MessageFactory.text(_error_text("Error linking your account", exc)))
             return
 
         if not result.get("linked"):
@@ -684,7 +698,7 @@ class JobApplyBot(ActivityHandler):
         try:
             await asyncio.to_thread(api_client.teams_unlink, aad_object_id)
         except Exception as exc:
-            await turn_context.send_activity(MessageFactory.text(f"❌ Error unlinking: {exc}"))
+            await turn_context.send_activity(MessageFactory.text(_error_text("Error unlinking", exc)))
             return
         await turn_context.send_activity(
             MessageFactory.text("✅ Unlinked. Message me again to re-link.")
@@ -699,7 +713,7 @@ class JobApplyBot(ActivityHandler):
         try:
             apps = await asyncio.to_thread(api_client.get_applications, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Error loading applications: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Error loading applications", exc)))
             return False
         if not apps:
             await ctx.send_activity(
@@ -750,7 +764,7 @@ class JobApplyBot(ActivityHandler):
         try:
             apps = await asyncio.to_thread(api_client.get_applications, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Error loading applications: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Error loading applications", exc)))
             return
 
         active = [a for a in apps if a.get("status") not in ("Rejected", "Not Applying")]
@@ -781,7 +795,7 @@ class JobApplyBot(ActivityHandler):
         try:
             apps = await asyncio.to_thread(api_client.get_applications, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Error loading applications: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Error loading applications", exc)))
             return
 
         active = [a for a in apps if a.get("status") not in ("Rejected", "Not Applying")]
@@ -868,7 +882,7 @@ class JobApplyBot(ActivityHandler):
                 api_client.get_calendar_events, from_dt, to_dt, user_email=user["email"]
             )
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load calendar: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load calendar", exc)))
             return
 
         if not events:
@@ -885,7 +899,7 @@ class JobApplyBot(ActivityHandler):
         try:
             events = await asyncio.to_thread(api_client.get_upcoming_events, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load calendar: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load calendar", exc)))
             return
 
         if not events:
@@ -966,7 +980,7 @@ class JobApplyBot(ActivityHandler):
         try:
             events = await asyncio.to_thread(api_client.get_calendar_events, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load calendar: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load calendar", exc)))
             return
 
         if not events:
@@ -1000,7 +1014,7 @@ class JobApplyBot(ActivityHandler):
         try:
             events = await asyncio.to_thread(api_client.get_calendar_events, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load calendar: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load calendar", exc)))
             return
 
         if not events:
@@ -1045,7 +1059,7 @@ class JobApplyBot(ActivityHandler):
         try:
             results = await asyncio.to_thread(api_client.search_companies, query)
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Search failed: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Search failed", exc)))
             return
 
         if not results:
@@ -1144,7 +1158,7 @@ class JobApplyBot(ActivityHandler):
             ))
             return True
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not download the file: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not download the file", exc)))
             return True
 
         if file_bytes[:4] != b"PK\x03\x04":
@@ -1162,7 +1176,7 @@ class JobApplyBot(ActivityHandler):
                 f"✅ Resume **{docx_attachment.name}** saved as your master resume."
             ))
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Failed to save resume: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Failed to save resume", exc)))
         return True
 
     async def _cmd_profile_guide(self, ctx: TurnContext, user: dict):
@@ -1239,7 +1253,7 @@ class JobApplyBot(ActivityHandler):
         try:
             apps = await asyncio.to_thread(api_client.get_applications, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not reach the tracker: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not reach the tracker", exc)))
             return
 
         counts: dict[str, int] = {s: 0 for s in VALID_STATUSES}
@@ -1292,7 +1306,7 @@ class JobApplyBot(ActivityHandler):
                 api_client.get_applications, status=resolved, user_email=user["email"]
             )
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Error: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Error", exc)))
             return
 
         if not apps:
@@ -1361,7 +1375,7 @@ class JobApplyBot(ActivityHandler):
         try:
             apps = await asyncio.to_thread(api_client.get_applications, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Error: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Error", exc)))
             return
 
         if not apps:
@@ -1397,7 +1411,7 @@ class JobApplyBot(ActivityHandler):
         try:
             apps = await asyncio.to_thread(api_client.get_applications, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Error: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Error", exc)))
             return
 
         if not apps:
@@ -1435,7 +1449,7 @@ class JobApplyBot(ActivityHandler):
         try:
             apps = await asyncio.to_thread(api_client.get_applications, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Error: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Error", exc)))
             return
 
         if not apps:
@@ -1482,7 +1496,7 @@ class JobApplyBot(ActivityHandler):
         try:
             apps = await asyncio.to_thread(api_client.get_applications, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Error: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Error", exc)))
             return
 
         if not apps:
@@ -1522,7 +1536,7 @@ class JobApplyBot(ActivityHandler):
         try:
             runs = await asyncio.to_thread(api_client.get_agent_runs, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Error: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Error", exc)))
             return
 
         if not runs:
@@ -1775,7 +1789,7 @@ class JobApplyBot(ActivityHandler):
         try:
             app, job_posting = await self._resolve_app_and_jd(app_id, user)
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load application: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load application", exc)))
             return
 
         company = app.get("company", "?")
@@ -1819,7 +1833,7 @@ class JobApplyBot(ActivityHandler):
         try:
             app, job_posting = await self._resolve_app_and_jd(app_id, user)
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load application: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load application", exc)))
             return
 
         company = app.get("company", "?")
@@ -1867,7 +1881,7 @@ class JobApplyBot(ActivityHandler):
         try:
             app, job_posting = await self._resolve_app_and_jd(app_id, user)
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load application: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load application", exc)))
             return
 
         company = app.get("company", "?")
@@ -1911,7 +1925,7 @@ class JobApplyBot(ActivityHandler):
         try:
             app, job_posting = await self._resolve_app_and_jd(app_id, user)
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load application: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load application", exc)))
             return
 
         company = app.get("company", "?")
@@ -1971,7 +1985,7 @@ class JobApplyBot(ActivityHandler):
                 run_id = run_data["run_id"]
                 status = api_client.poll_run(run_id, user_email=user_email)
             except Exception as exc:
-                self._proactive_message(adapter, conv_ref, f"❌ Error starting run: {exc}")
+                self._proactive_message(adapter, conv_ref, _error_text("Error starting run", exc))
                 return
 
             if status["status"] == "done":
@@ -2028,7 +2042,7 @@ class JobApplyBot(ActivityHandler):
                 prep_id = prep_data["prep_id"]
                 status = api_client.poll_prep(prep_id, user_email=user_email)
             except Exception as exc:
-                self._proactive_message(adapter, conv_ref, f"❌ Error: {exc}")
+                self._proactive_message(adapter, conv_ref, _error_text("Error", exc))
                 return
 
             if status["status"] == "done":
@@ -2079,7 +2093,7 @@ class JobApplyBot(ActivityHandler):
                 aq_id = aq_data["aq_id"]
                 status = api_client.poll_aq(aq_id, user_email=user_email)
             except Exception as exc:
-                self._proactive_message(adapter, conv_ref, f"❌ Error: {exc}")
+                self._proactive_message(adapter, conv_ref, _error_text("Error", exc))
                 return
 
             if status["status"] == "done":
@@ -2165,7 +2179,7 @@ class JobApplyBot(ActivityHandler):
                 ty_id = ty_data["ty_id"]
                 status = api_client.poll_thankyou(ty_id, user_email=user_email)
             except Exception as exc:
-                self._proactive_message(adapter, conv_ref, f"❌ Error: {exc}")
+                self._proactive_message(adapter, conv_ref, _error_text("Error", exc))
                 return
 
             if status["status"] == "done":
@@ -2200,7 +2214,7 @@ class JobApplyBot(ActivityHandler):
         try:
             record = await asyncio.to_thread(api_client.get_application, app_id, user_email=user_email)
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load application: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load application", exc)))
             return
 
         company = record.get("company", "?")
@@ -2236,7 +2250,7 @@ class JobApplyBot(ActivityHandler):
                 optimize_id = result["optimize_id"]
                 status = api_client.poll_optimize(optimize_id, user_email=user_email)
             except Exception as exc:
-                self._proactive_message(adapter, conv_ref, f"❌ Error: {exc}")
+                self._proactive_message(adapter, conv_ref, _error_text("Error", exc))
                 return
 
             if status["status"] == "done":
@@ -2268,7 +2282,7 @@ class JobApplyBot(ActivityHandler):
         try:
             record = await asyncio.to_thread(api_client.get_application, app_id, user_email=user_email)
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load application: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load application", exc)))
             return
 
         company = record.get("company", "?")
@@ -2380,7 +2394,7 @@ class JobApplyBot(ActivityHandler):
                 )
             )
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Error: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Error", exc)))
 
     async def _submit_track_view(self, ctx: TurnContext, data: dict, user: dict):
         app_id = (data.get("app_id") or "").strip()
@@ -2391,7 +2405,7 @@ class JobApplyBot(ActivityHandler):
         try:
             a = await asyncio.to_thread(api_client.get_application, app_id, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Error: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Error", exc)))
             return
 
         status = a.get("status", "?")
@@ -2499,7 +2513,7 @@ class JobApplyBot(ActivityHandler):
         try:
             a = await asyncio.to_thread(api_client.get_application, app_id, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load application: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load application", exc)))
             return
 
         status_choices = [{"title": s, "value": s} for s in VALID_STATUSES]
@@ -2601,7 +2615,7 @@ class JobApplyBot(ActivityHandler):
                 + (f"\n> {note}" if note else "")
             ))
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Failed to update: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Failed to update", exc)))
 
     async def _submit_track_note(self, ctx: TurnContext, data: dict, user: dict):
         app_id = (data.get("app_id") or "").strip()
@@ -2617,7 +2631,7 @@ class JobApplyBot(ActivityHandler):
                 f"✅ Note added to **{record.get('role_title')}** at **{record.get('company')}**\n> {note}"
             ))
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Failed to add note: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Failed to add note", exc)))
 
     async def _submit_track_delete_select(self, ctx: TurnContext, data: dict, user: dict):
         """Step 1 of track delete -> show a confirmation card before deleting."""
@@ -2629,7 +2643,7 @@ class JobApplyBot(ActivityHandler):
         try:
             a = await asyncio.to_thread(api_client.get_application, app_id, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load application: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load application", exc)))
             return
 
         label = f"{a.get('company', '?')} — {a.get('role_title', '?')}"
@@ -2666,7 +2680,7 @@ class JobApplyBot(ActivityHandler):
                 f"🗑️ Deleted **{record.get('role_title')}** at **{record.get('company')}**."
             ))
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Failed to delete: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Failed to delete", exc)))
 
     async def _submit_cal_add(self, ctx: TurnContext, data: dict, user: dict):
         title = (data.get("title") or "").strip()
@@ -2724,7 +2738,7 @@ class JobApplyBot(ActivityHandler):
                 f"{type_label} · {_fmt_event_dt(ev.get('datetime', ''))}"
             ))
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Failed to create event: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Failed to create event", exc)))
 
     async def _submit_cal_view(self, ctx: TurnContext, data: dict, user: dict):
         event_id = (data.get("event_id") or "").strip()
@@ -2735,7 +2749,7 @@ class JobApplyBot(ActivityHandler):
         try:
             ev = await asyncio.to_thread(api_client.get_calendar_event, event_id, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load event: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load event", exc)))
             return
 
         type_label = EVENT_TYPE_LABELS.get(ev.get("event_type", ""), ev.get("event_type", "?"))
@@ -2785,7 +2799,7 @@ class JobApplyBot(ActivityHandler):
         try:
             ev = await asyncio.to_thread(api_client.get_calendar_event, event_id, user_email=user["email"])
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Could not load event: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Could not load event", exc)))
             return
 
         label = f"{ev.get('title', '?')} — {_fmt_event_dt(ev.get('datetime', ''))}"
@@ -2819,7 +2833,7 @@ class JobApplyBot(ActivityHandler):
             await asyncio.to_thread(api_client.delete_calendar_event, event_id, user_email=user["email"])
             await ctx.send_activity(MessageFactory.text("\U0001f5d1️ Calendar event deleted."))
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Failed to delete: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Failed to delete", exc)))
 
     async def _submit_profile_guide(self, ctx: TurnContext, data: dict, user: dict):
         guide = data.get("guide", "") or ""
@@ -2829,7 +2843,7 @@ class JobApplyBot(ActivityHandler):
             )
             await ctx.send_activity(MessageFactory.text("✅ Profile & voice guide saved."))
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Failed to save guide: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Failed to save guide", exc)))
 
     async def _submit_notifications(self, ctx: TurnContext, data: dict, user: dict):
         try:
@@ -2848,7 +2862,7 @@ class JobApplyBot(ActivityHandler):
                 api_client.update_profile, {"notification_prefs": prefs}, user_email=user["email"]
             )
         except Exception as exc:
-            await ctx.send_activity(MessageFactory.text(f"❌ Failed to save preferences: {exc}"))
+            await ctx.send_activity(MessageFactory.text(_error_text("Failed to save preferences", exc)))
             return
 
         enabled = [label for key, label in _NOTIF_LABELS.items() if prefs[key]]

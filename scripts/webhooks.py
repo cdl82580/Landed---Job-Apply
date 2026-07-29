@@ -23,10 +23,9 @@ import urllib.parse
 import uuid
 from typing import Any
 
-import requests as _requests
-
 from . import storage
-from .ssrf import is_ssrf_url as _is_ssrf_url
+from .ssrf import resolve_safe_ip as _resolve_safe_ip
+from .ssrf import post_pinned as _post_pinned
 
 _INDEX_KEY    = "webhooks/_index.json"
 
@@ -422,8 +421,14 @@ def _deliver(webhook: dict[str, Any], event: dict[str, Any]) -> None:
         sep = "&" if "?" in url else "?"
         url = url + sep + urllib.parse.urlencode(qp)
 
-    # Re-check SSRF at delivery time to guard against DNS rebinding
-    if _is_ssrf_url(url):
+    # Resolve at delivery time and pin every attempt below to this one address
+    # (see resolve_safe_ip's docstring) — a separate "check with is_ssrf_url(),
+    # then let requests.post() independently re-resolve and connect" two-step
+    # leaves a DNS-rebinding gap open between the check and the connection
+    # (and again between retry attempts); resolving once and reusing that
+    # exact address closes it.
+    resolved_ip = _resolve_safe_ip(url)
+    if resolved_ip is None:
         error = "Delivery blocked: URL resolved to a private/internal address"
         duration_ms = int((time.time() - start) * 1000)
         delivery: dict[str, Any] = {
@@ -457,7 +462,7 @@ def _deliver(webhook: dict[str, Any], event: dict[str, Any]) -> None:
     # Retry once on network errors or 5xx responses (transient failures).
     for attempt in range(2):
         try:
-            resp = _requests.post(url, data=body, headers=headers, timeout=10, allow_redirects=False)
+            resp = _post_pinned(url, resolved_ip, data=body, headers=headers, timeout=10, allow_redirects=False)
             status_code = resp.status_code
             success     = 200 <= status_code < 300
             error       = None
