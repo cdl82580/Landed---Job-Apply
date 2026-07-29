@@ -1,6 +1,6 @@
 {
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
-  "manifestVersion": "1.17",
+  "manifestVersion": "1.20",
   "version": "1.1.0",
   "id": "f71306b1-602b-496c-a579-7a8afa62be37",
   "developer": {
@@ -10,8 +10,8 @@
     "termsOfUseUrl": "https://apply.cdlav.us/terms"
   },
   "name": {
-    "short": "Job Apply",
-    "full": "Job Apply Agent"
+    "short": "Landed",
+    "full": "Landed Job Application Agent"
   },
   "description": {
     "short": "AI-powered job application agent",
