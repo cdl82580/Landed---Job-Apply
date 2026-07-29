@@ -17,6 +17,7 @@ Endpoints:
 from __future__ import annotations
 
 import concurrent.futures
+import logging as _logging
 import time
 import uuid
 from typing import Any
@@ -31,8 +32,10 @@ from scripts import applications as app_store
 from scripts import user_audit
 from scripts import email_verification as ev
 from scripts import agent_runs
+from routers.applications import VALID_STATUSES, VALID_PRIORITIES
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+_log = _logging.getLogger(__name__)
 
 VALID_ROLES = {"user", "admin"}
 
@@ -103,6 +106,7 @@ async def list_users(request: Request):
             apps = app_store.list_applications(uid)
             app_count = apps["total"]
         except Exception:
+            _log.warning("list_users: failed to fetch application count for user %s", uid, exc_info=True)
             app_count = 0
         return {
             "user_id":        uid,
@@ -241,6 +245,7 @@ async def list_all_applications(request: Request):
                 item["_user_email"] = u.get("email", "")
             return items
         except Exception:
+            _log.warning("list_all_applications: failed to fetch applications for user %s", uid, exc_info=True)
             return []
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
@@ -271,6 +276,7 @@ async def get_application(user_id: str, app_id: str, request: Request):
 
 @router.put("/applications/{user_id}/{app_id}")
 async def update_application(user_id: str, app_id: str, body: AppUpdate, request: Request):
+    from api import _client_ip  # deferred: api.py imports this router at module load time
     admin = _admin(request)
     record = app_store.get_application(user_id, app_id)
     if not record:
@@ -278,6 +284,10 @@ async def update_application(user_id: str, app_id: str, body: AppUpdate, request
 
     if body.url and not body.url.startswith(("http://", "https://")):
         raise HTTPException(400, "url must start with http:// or https://")
+    if body.status is not None and body.status not in VALID_STATUSES:
+        raise HTTPException(400, f"status must be one of: {', '.join(sorted(VALID_STATUSES))}")
+    if body.priority is not None and body.priority not in VALID_PRIORITIES:
+        raise HTTPException(400, f"priority must be one of: {', '.join(sorted(VALID_PRIORITIES))}")
 
     updates = body.model_dump(exclude_unset=True)
     record.update(updates)
@@ -288,7 +298,7 @@ async def update_application(user_id: str, app_id: str, body: AppUpdate, request
         "action":    "admin_updated",
         "actor":     admin["email"],
         "timestamp": _now(),
-        "ip":        None,
+        "ip":        _client_ip(request),
         "changes":   {k: updates[k] for k in updates},
     })
 
@@ -300,6 +310,7 @@ async def update_application(user_id: str, app_id: str, body: AppUpdate, request
 
 @router.delete("/applications/{user_id}/{app_id}", status_code=204)
 async def delete_application(user_id: str, app_id: str, request: Request):
+    from api import _client_ip  # deferred: api.py imports this router at module load time
     admin = _admin(request)
     record = app_store.get_application(user_id, app_id)
     if not record:
@@ -310,7 +321,7 @@ async def delete_application(user_id: str, app_id: str, request: Request):
         "action":    "admin_deleted",
         "actor":     admin["email"],
         "timestamp": _now(),
-        "ip":        None,
+        "ip":        _client_ip(request),
         "changes":   None,
     })
     app_store.save_deleted_tombstone(user_id, record)
@@ -333,6 +344,7 @@ def _get_app_or_404(user_id: str, app_id: str) -> dict:
 
 @router.post("/applications/{user_id}/{app_id}/comments", status_code=201)
 async def add_comment(user_id: str, app_id: str, body: CommentCreate, request: Request):
+    from api import _client_ip  # deferred: api.py imports this router at module load time
     admin  = _admin(request)
     record = _get_app_or_404(user_id, app_id)
 
@@ -350,7 +362,7 @@ async def add_comment(user_id: str, app_id: str, body: CommentCreate, request: R
     record.setdefault("comments", []).append(comment)
     record.setdefault("audit_log", []).append({
         "id": str(uuid.uuid4()), "action": "admin_comment_added",
-        "actor": admin["email"], "timestamp": now, "ip": None,
+        "actor": admin["email"], "timestamp": now, "ip": _client_ip(request),
         "details": {"preview": comment["text"][:60]},
     })
     record["updated_at"] = now
@@ -365,6 +377,7 @@ async def add_comment(user_id: str, app_id: str, body: CommentCreate, request: R
 @router.put("/applications/{user_id}/{app_id}/comments/{comment_id}")
 async def update_comment(user_id: str, app_id: str, comment_id: str,
                          body: CommentUpdate, request: Request):
+    from api import _client_ip  # deferred: api.py imports this router at module load time
     admin  = _admin(request)
     record = _get_app_or_404(user_id, app_id)
 
@@ -372,13 +385,13 @@ async def update_comment(user_id: str, app_id: str, comment_id: str,
         raise HTTPException(400, "Comment text cannot be empty")
 
     for c in record.get("comments", []):
-        if c["id"] == comment_id:
+        if c.get("id") == comment_id:
             old_text   = c["text"]
             c["text"]       = body.text.strip()
             c["updated_at"] = _now()
             record.setdefault("audit_log", []).append({
                 "id": str(uuid.uuid4()), "action": "admin_comment_edited",
-                "actor": admin["email"], "timestamp": _now(), "ip": None,
+                "actor": admin["email"], "timestamp": _now(), "ip": _client_ip(request),
                 "details": {"from": old_text[:60], "to": c["text"][:60]},
             })
             record["updated_at"] = _now()
@@ -393,17 +406,18 @@ async def update_comment(user_id: str, app_id: str, comment_id: str,
 
 @router.delete("/applications/{user_id}/{app_id}/comments/{comment_id}", status_code=204)
 async def delete_comment(user_id: str, app_id: str, comment_id: str, request: Request):
+    from api import _client_ip  # deferred: api.py imports this router at module load time
     admin  = _admin(request)
     record = _get_app_or_404(user_id, app_id)
 
     before = len(record.get("comments", []))
-    record["comments"] = [c for c in record.get("comments", []) if c["id"] != comment_id]
+    record["comments"] = [c for c in record.get("comments", []) if c.get("id") != comment_id]
     if len(record["comments"]) == before:
         raise HTTPException(404, "Comment not found")
 
     record.setdefault("audit_log", []).append({
         "id": str(uuid.uuid4()), "action": "admin_comment_deleted",
-        "actor": admin["email"], "timestamp": _now(), "ip": None,
+        "actor": admin["email"], "timestamp": _now(), "ip": _client_ip(request),
         "details": {"comment_id": comment_id},
     })
     record["updated_at"] = _now()
@@ -530,6 +544,7 @@ async def get_unified_audit_log(
                              "entity_label": None}
                             for e in user_audit.get_events(uid)]
                 except Exception:
+                    _log.warning("audit log: failed to fetch user events for %s", uid, exc_info=True)
                     return []
             for batch in pool.map(_user_events, users):
                 all_events.extend(batch)
@@ -560,9 +575,10 @@ async def get_unified_audit_log(
                                     "details": e.get("changes") or e.get("details") or {},
                                 })
                         except Exception:
-                            pass
+                            _log.warning("audit log: failed to fetch application %s for user %s",
+                                        item.get("id"), uid, exc_info=True)
                 except Exception:
-                    pass
+                    _log.warning("audit log: failed to list applications for user %s", uid, exc_info=True)
                 return events
             for batch in pool.map(_app_events, users):
                 all_events.extend(batch)
@@ -637,6 +653,7 @@ async def export_audit_log(
                          "user_email": email, "entity_id": None, "entity_label": None}
                         for e in user_audit.get_events(uid)]
             except Exception:
+                _log.warning("audit export: failed to fetch user events for %s", uid, exc_info=True)
                 return []
 
         def _app_ev(u):
@@ -657,9 +674,10 @@ async def export_audit_log(
                                            "actor": e.get("actor", ""), "ip": e.get("ip"),
                                            "details": e.get("changes") or e.get("details") or {}})
                     except Exception:
-                        pass
+                        _log.warning("audit export: failed to fetch application %s for user %s",
+                                    item.get("id"), uid, exc_info=True)
             except Exception:
-                pass
+                _log.warning("audit export: failed to list applications for user %s", uid, exc_info=True)
             return events
 
         for batch in pool.map(_user_ev, users):
@@ -848,6 +866,7 @@ async def delete_webhook(webhook_id: str, request: Request):
 
 @router.post("/webhooks/{webhook_id}/test")
 async def test_webhook(webhook_id: str, request: Request):
+    from api import _client_ip  # deferred: api.py imports this router at module load time
     admin = _admin(request)
     w = wh_store.get_webhook(webhook_id)
     if not w:
@@ -857,7 +876,7 @@ async def test_webhook(webhook_id: str, request: Request):
         "action":     "webhook_tested",
         "actor":      admin["email"],
         "timestamp":  _now(),
-        "ip":         None,
+        "ip":         _client_ip(request),
         "details":    {"message": "This is a test delivery from Job Apply admin."},
         "user_id":    admin["user_id"],
         "user_email": admin["email"],

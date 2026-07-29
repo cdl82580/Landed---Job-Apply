@@ -59,11 +59,17 @@ class TestEscapeJsString:
         assert '"' not in result or '\\"' in result
 
     def test_newlines_safe_in_output(self):
-        # Newlines should be handled so they don't break JS string literals
+        # A literal newline would terminate a JS double-quoted string early
+        # and crash the generated script — it must be escaped, not passed through.
         result = self.fn("line1\nline2")
-        assert isinstance(result, str)
-        assert "line1" in result
-        assert "line2" in result
+        assert "\n" not in result
+        assert "\\n" in result
+        assert 'const x = "%s";' % result  # must be a syntactically plausible one-liner
+
+    def test_carriage_return_escaped(self):
+        result = self.fn("line1\r\nline2")
+        assert "\r" not in result and "\n" not in result
+        assert "\\n" in result
 
     def test_tabs_safe_in_output(self):
         result = self.fn("col1\tcol2")

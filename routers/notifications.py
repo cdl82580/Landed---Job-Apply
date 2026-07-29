@@ -2,15 +2,21 @@
 routers/notifications.py — Email notification action endpoint.
 
 GET  /api/notifications/action?token=...
-     Verifies a signed notification token and executes the action.
+     Verifies a signed notification token and renders a one-click confirm
+     page — it does NOT execute the action. (GET links get prefetched by
+     email-security scanners, so a GET that mutated state could be triggered
+     by a scanner before the user ever opened the email.)
      Actions:
        status  — PATCH application status (and optionally date_applied)
        snooze  — suppress notifications for this app for N days
 
      For "status=Applied" without a date_applied in the token payload,
-     redirects to /confirm-applied.html?token=... so the user can pick
-     the date in a small form. All other actions execute immediately and
-     redirect to /index.html#tracker.
+     redirects straight to /confirm-applied.html?token=... instead (that
+     flow already requires a POST to take effect).
+
+POST /api/notifications/action  (form field: token)
+     Re-verifies the token and actually performs the action, then redirects
+     to /index.html#tracker. Reached via the Confirm button on the GET page.
 """
 
 from __future__ import annotations
@@ -41,21 +47,21 @@ def _app_url(app_id: str) -> str:
 # Action endpoint
 # ---------------------------------------------------------------------------
 
-@router.get("/action")
-async def notification_action(token: str = Query(...)):
-    data = verify_token(token)
-    if not data:
-        raise HTTPException(400, "This link has expired or is invalid.")
+def _describe_action(action: str, payload: dict) -> str:
+    """Human-readable description of what confirming this link will do."""
+    if action == "snooze":
+        return f"check back on this in {int(payload.get('days', 5))} days instead of now"
+    if action == "snooze_follow_up":
+        return f"remind you again in {int(payload.get('days', 7))} days instead of now"
+    if action == "snooze_gone_silent":
+        return f"snooze this application for {int(payload.get('days', 14))} days"
+    if action == "status":
+        return f"mark this application as {payload.get('status', '(unknown status)')}"
+    return "update this application"
 
-    user_id = data["user_id"]
-    app_id  = data["app_id"]
-    action  = data["action"]
-    payload = data.get("payload", {})
 
-    record = app_store.get_application(user_id, app_id)
-    if not record:
-        raise HTTPException(404, "Application not found.")
-
+def _execute_action(user_id: str, app_id: str, action: str, payload: dict, record: dict) -> HTMLResponse:
+    """Perform the state-changing side effect for an already-verified action token."""
     if action == "snooze":
         days = int(payload.get("days", 5))
         notif_state.snooze_researching(user_id, app_id, days)
@@ -96,10 +102,6 @@ async def notification_action(token: str = Query(...)):
         if not new_status:
             raise HTTPException(400, "Missing status in token payload.")
 
-        # For "Applied" without a pre-set date, send to the date-picker page
-        if new_status == "Applied" and not date_applied:
-            return RedirectResponse(f"/api/notifications/confirm-applied?token={token}", status_code=302)
-
         _apply_status(user_id, app_id, record, new_status, date_applied)
         notif_state.clear_researching(user_id, app_id)
         notif_state.clear_follow_up(user_id, app_id)
@@ -114,6 +116,60 @@ async def notification_action(token: str = Query(...)):
         return _ok_page(msg, record["company"], record["role_title"])
 
     raise HTTPException(400, f"Unknown action: {action!r}")
+
+
+@router.get("/action")
+async def notification_action(token: str = Query(...)):
+    """Render a one-click confirmation page for the action — deliberately
+    does NOT perform the state change on GET. Email-security scanners
+    (Outlook Safe Links, Proofpoint, etc.) prefetch GET links automatically;
+    if GET executed the action directly, a scanner could silently mutate
+    the application before the user ever opened the email. The actual
+    mutation happens in the POST handler below, triggered by the Confirm
+    button click."""
+    data = verify_token(token)
+    if not data:
+        raise HTTPException(400, "This link has expired or is invalid.")
+
+    user_id = data["user_id"]
+    app_id  = data["app_id"]
+    action  = data["action"]
+    payload = data.get("payload", {})
+
+    record = app_store.get_application(user_id, app_id)
+    if not record:
+        raise HTTPException(404, "Application not found.")
+
+    if action == "status" and not payload.get("status"):
+        raise HTTPException(400, "Missing status in token payload.")
+
+    # "Applied" without a pre-set date needs the date-picker page instead —
+    # that flow already requires a POST to take effect, so no extra confirm step.
+    if action == "status" and payload.get("status") == "Applied" and not payload.get("date_applied"):
+        return RedirectResponse(f"/api/notifications/confirm-applied?token={token}", status_code=302)
+
+    return _confirm_page(_describe_action(action, payload), token, record["company"], record["role_title"])
+
+
+@router.post("/action")
+async def notification_action_submit(request: Request):
+    form  = await request.form()
+    token = str(form.get("token", ""))
+
+    data = verify_token(token)
+    if not data:
+        raise HTTPException(400, "This link has expired or is invalid.")
+
+    user_id = data["user_id"]
+    app_id  = data["app_id"]
+    action  = data["action"]
+    payload = data.get("payload", {})
+
+    record = app_store.get_application(user_id, app_id)
+    if not record:
+        raise HTTPException(404, "Application not found.")
+
+    return _execute_action(user_id, app_id, action, payload, record)
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +334,52 @@ def _ok_page(message: str, company: str, role: str) -> HTMLResponse:
     <h1>{company} — {role}</h1>
     <p class="msg">{message}</p>
     <a href="/index.html#tracker" class="btn">Open Tracker &rarr;</a>
+  </div>
+</body>
+</html>"""
+    return HTMLResponse(page)
+
+
+def _confirm_page(description: str, token: str, company: str, role: str) -> HTMLResponse:
+    company    = html.escape(str(company))
+    role       = html.escape(str(role))
+    safe_desc  = html.escape(description)
+    safe_token = html.escape(token)
+    page = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Confirm — Job Apply</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ font-family: system-ui, -apple-system, sans-serif; background: #F9FAFB;
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh; padding: 1.5rem; }}
+    .card {{ background: #fff; border: 1px solid #E5E7EB; border-radius: 10px;
+             padding: 2rem 2.25rem; max-width: 440px; width: 100%; text-align: center; }}
+    h1 {{ color: #1A3C5E; font-size: 1.1rem; margin-bottom: .5rem; }}
+    .sub {{ color: #6B7280; font-size: .9rem; margin-bottom: 1.5rem; }}
+    .actions {{ display: flex; gap: .75rem; margin-top: 1.25rem; }}
+    .btn {{ flex: 1; padding: .625rem 1rem; border: none; border-radius: 6px;
+            font-size: .9rem; font-weight: 600; cursor: pointer; text-align: center;
+            text-decoration: none; }}
+    .btn-primary {{ background: #1A3C5E; color: #fff; }}
+    .btn-secondary {{ background: #F3F4F6; color: #374151;
+                      border: 1px solid #D1D5DB; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>{company} — {role}</h1>
+    <p class="sub">Confirm: {safe_desc}?</p>
+    <form method="POST" action="/api/notifications/action">
+      <input type="hidden" name="token" value="{safe_token}">
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Confirm</button>
+        <a href="/index.html#tracker" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
   </div>
 </body>
 </html>"""

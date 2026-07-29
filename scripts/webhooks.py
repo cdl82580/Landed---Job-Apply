@@ -402,7 +402,13 @@ def _deliver(webhook: dict[str, Any], event: dict[str, Any]) -> None:
         "X-Webhook-ID":   wid,
         "X-Delivery-ID":  delivery_id,
     }
-    headers.update(webhook.get("headers") or {})
+    # Admin-supplied custom headers — block Host specifically: the SSRF guard
+    # below only validates the URL's own hostname/IP, and a spoofed Host header
+    # could route a request to a public multi-tenant IP through to an internal
+    # vhost on infrastructure that Host-routes behind that IP (domain fronting).
+    custom_headers = {k: v for k, v in (webhook.get("headers") or {}).items()
+                       if k.lower() != "host"}
+    headers.update(custom_headers)
 
     secret = (webhook.get("secret") or "").strip()
     if secret:

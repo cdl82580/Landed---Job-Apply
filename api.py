@@ -257,6 +257,11 @@ def _require_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Account deactivated")
     if record and user.get("pwv") and user["pwv"] != _pw_version(record.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Session invalidated — please log in again")
+    # Overwrite the token's baked-in role with the current one — the token can be
+    # up to SESSION_DAYS stale, and callers use user["role"] for ownership checks
+    # (e.g. "is this an admin reading someone else's run?"), not just admin gating.
+    if record:
+        user["role"] = record.get("role")
     return user
 
 
@@ -1896,6 +1901,23 @@ async def health(request: Request):
         return {"status": overall}
     return {"status": overall, **checks}
 
+async def _read_upload_capped(upload: UploadFile, max_bytes: int, over_limit_msg: str) -> bytes:
+    """Read an UploadFile in chunks, aborting as soon as it's clear the upload
+    exceeds max_bytes — instead of buffering the whole body into memory first
+    and only then checking its size."""
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await upload.read(256 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(400, over_limit_msg)
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 # ---------------------------------------------------------------------------
 # Auth endpoints
 # ---------------------------------------------------------------------------
@@ -1925,11 +1947,9 @@ async def register(
     if not resume.filename.lower().endswith(".docx"):
         raise HTTPException(400, "Resume must be a .docx file.")
 
-    resume_data = await resume.read()
+    resume_data = await _read_upload_capped(resume, 10 * 1024 * 1024, "Resume file must be under 10 MB.")
     if len(resume_data) < 1000:
         raise HTTPException(400, "Resume file appears to be empty or invalid.")
-    if len(resume_data) > 10 * 1024 * 1024:
-        raise HTTPException(400, "Resume file must be under 10 MB.")
     if not resume_data[:4] == b"PK\x03\x04":
         raise HTTPException(400, "File is not a valid .docx (must be a ZIP archive). If this is a .doc file, please convert it to .docx first.")
 
@@ -2272,11 +2292,9 @@ async def upload_resume(request: Request, resume: UploadFile = File(...)):
     user_data = _require_user(request)
     if not resume.filename.lower().endswith(".docx"):
         raise HTTPException(400, "Resume must be a .docx file.")
-    data = await resume.read()
+    data = await _read_upload_capped(resume, 10 * 1024 * 1024, "Resume file must be under 10 MB.")
     if len(data) < 1000:
         raise HTTPException(400, "File appears empty or invalid.")
-    if len(data) > 10 * 1024 * 1024:
-        raise HTTPException(400, "Resume file must be under 10 MB.")
     if not data[:4] == b"PK\x03\x04":
         raise HTTPException(400, "File is not a valid .docx (must be a ZIP archive). If this is a .doc file, please convert it to .docx first.")
     backed_up = storage.save_resume(user_data["user_id"], data)

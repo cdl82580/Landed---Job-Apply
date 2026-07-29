@@ -1941,7 +1941,37 @@
                 }
               ]
             },
-            "description": "Unauthenticated. Verifies a signed one-time notification token and executes the encoded action. Used in outbound nudge/follow-up email links. Actions: `status` (update application status), `snooze` (suppress notifications for N days). For `status=Applied` without a `date_applied` in the token, redirects to `/confirm-applied.html?token=…` so the user can pick the date. All other actions redirect to `#tracker`. Token TTL is set at issue time (default 7 days)."
+            "description": "Unauthenticated. Verifies a signed notification token and renders a one-click HTML confirm page — does NOT execute the action itself (a GET that mutated state would let email-security scanners like Outlook Safe Links silently trigger it via prefetch before the user opens the email). Used in outbound nudge/follow-up email links. Actions: `status` (update application status), `snooze` (suppress notifications for N days). For `status=Applied` without a `date_applied` in the token, redirects straight to `/confirm-applied.html?token=…` instead (that flow already requires a POST). All other actions render a Confirm button that POSTs to this same path. Token TTL is set at issue time (default 7 days)."
+          },
+          "response": []
+        },
+        {
+          "name": "Notification Action Submit (confirm)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "token",
+                  "value": "NOTIFICATION_TOKEN",
+                  "description": "Signed HMAC notification token from email link"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/notifications/action",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "action"
+              ]
+            },
+            "description": "Unauthenticated. Re-verifies the token and actually executes the action (the GET above only renders the confirm page). Reached via the Confirm button's form submission. Redirects to `#tracker` on success."
           },
           "response": []
         },

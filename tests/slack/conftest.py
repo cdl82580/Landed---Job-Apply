@@ -52,13 +52,14 @@ class _PassthroughApp:
             return fn
         return decorator
 
-    command  = _identity_decorator
-    view     = _identity_decorator
-    options  = _identity_decorator
-    event    = _identity_decorator
-    action   = _identity_decorator
-    message  = _identity_decorator
-    shortcut = _identity_decorator
+    command    = _identity_decorator
+    view       = _identity_decorator
+    options    = _identity_decorator
+    event      = _identity_decorator
+    action     = _identity_decorator
+    message    = _identity_decorator
+    shortcut   = _identity_decorator
+    middleware = _identity_decorator
 
 
 # ── Lazy import — prevents re-importing on every test ─────────────────────

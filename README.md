@@ -112,7 +112,9 @@ See [Slack Commands](#slack-commands) section below.
 
 ### Teams Bot
 See [Teams Commands](#teams-commands) section below. Unlike the Slack bot (which
-always acts as the single primary account), the Teams bot resolves *which*
+always acts as the single primary account, and — via a global Bolt middleware
+keyed on `SLACK_NOTIFY_USER_ID` — is restricted to that one Slack user ID so no
+other workspace member/guest can act on it), the Teams bot resolves *which*
 Landed account it's acting on behalf of per Teams user — see that section
 for the identity-linking flow. `frontend/privacy.html` and `frontend/terms.html`
 are served unauthenticated at `/privacy` and `/terms` — Teams' permission-consent
@@ -513,7 +515,7 @@ All three process groups share the same Docker image and all Fly secrets.
 | `SLACK_BOT_TOKEN` | Slack bot token (`xoxb-...`) |
 | `SLACK_SIGNING_SECRET` | Slack signing secret |
 | `SLACK_APP_TOKEN` | App-level token (`xapp-...`) — **required** for Socket Mode |
-| `SLACK_NOTIFY_USER_ID` | Slack user ID to DM for calendar reminders |
+| `SLACK_NOTIFY_USER_ID` | Slack user ID to DM for calendar reminders. Also gates the Slack bot: every command/action/DM is restricted to this user ID — set it on any workspace with more than one member, or every member has full control of the account. Unset disables the gate (matches this var's existing "unset = feature off" convention) |
 | `MICROSOFT_APP_ID` | Azure Bot Framework app ID (Teams bot channel auth) |
 | `MICROSOFT_APP_PASSWORD` | Azure Bot Framework app password |
 | `MICROSOFT_APP_TENANT_ID` | Azure AD tenant ID (single-tenant Teams app) |
@@ -646,7 +648,8 @@ See `JobApply.postman_collection.json` for the full request/response reference.
 | DELETE | `/api/admin/kb/categories/{id}` | admin | Delete KB category |
 | POST | `/api/admin/kb/seed` | admin | Replace entire KB from JSON payload |
 | POST | `/api/admin/kb/seed-from-file` | admin | Re-extract KB from `frontend/kb.html` (parsed in Python, no Node/`eval()`) and seed to Tigris |
-| GET | `/api/notifications/action?token=` | — | Consume a signed one-time notification token (from nudge/follow-up emails) — executes `status` or `snooze` action; redirects to tracker on success |
+| GET | `/api/notifications/action?token=` | — | Verify a signed notification token (from nudge/follow-up emails) and render a one-click confirm page — does NOT execute the action (avoids email-scanner GET-prefetch silently mutating state) |
+| POST | `/api/notifications/action` | — | Execute the `status` or `snooze` action for a verified token (form field `token`) — reached via the Confirm button; redirects to tracker on success |
 | GET | `/api/notifications/confirm-applied?token=` | — | Signed-token date picker page for "Applied" status without a pre-set date |
 | POST | `/api/notifications/confirm-applied` | — | Submit the applied date from the confirm-applied form |
 | GET | `/api/admin/users` | admin | List all users |

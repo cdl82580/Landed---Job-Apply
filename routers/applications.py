@@ -599,7 +599,7 @@ async def update_comment(
         raise HTTPException(400, "Comment text cannot be empty")
 
     for c in record.get("comments", []):
-        if c["id"] == comment_id:
+        if c.get("id") == comment_id:
             old_text = c["text"]
             c["text"]       = body.text.strip()
             c["updated_at"] = _now()
@@ -727,6 +727,8 @@ def _resolve_jd_text(record: dict, config) -> str | None:
 async def score_application(app_id: str, request: Request):
     """(Re)score how well the user's resume/profile matches this application's
     job posting. Synchronous — same pattern as /api/jd/format."""
+    from api import _check_rate_limit  # deferred: api.py imports this router at module load time
+    _check_rate_limit(request, "app_score", max_hits=20, window_secs=3600)
     user_id = request.state.user["user_id"]
     actor   = _actor(request)
     record  = _get_or_404(user_id, app_id)
@@ -756,6 +758,8 @@ async def score_application(app_id: str, request: Request):
 @router.post("/{app_id}/extract-jd")
 async def extract_application_jd(app_id: str, request: Request):
     """Fetch the application's posting URL and extract the job description via Claude."""
+    from api import _check_rate_limit  # deferred: api.py imports this router at module load time
+    _check_rate_limit(request, "app_extract_jd", max_hits=20, window_secs=3600)
     user_id = request.state.user["user_id"]
     actor   = _actor(request)
     record  = _get_or_404(user_id, app_id)
@@ -779,6 +783,8 @@ async def extract_application_jd(app_id: str, request: Request):
 async def setup_folder(app_id: str, request: Request, response: Response):
     """Create a Drive folder for this application and capture job_description.md
     from the posting URL in the background. Returns immediately."""
+    from api import _check_rate_limit  # deferred: api.py imports this router at module load time
+    _check_rate_limit(request, "app_setup_folder", max_hits=20, window_secs=3600)
     user_id = request.state.user["user_id"]
     actor   = _actor(request)
     record  = _get_or_404(user_id, app_id)
@@ -810,6 +816,8 @@ async def pipeline_with_manual_jd(
     """Re-run the setup pipeline with a manually pasted job description —
     used when automatic extraction from the posting URL fails. Saves the
     pasted text as job_description.md and re-scores."""
+    from api import _check_rate_limit  # deferred: api.py imports this router at module load time
+    _check_rate_limit(request, "app_pipeline_jd", max_hits=20, window_secs=3600)
     user_id = request.state.user["user_id"]
     actor   = _actor(request)
     record  = _get_or_404(user_id, app_id)
@@ -869,8 +877,8 @@ async def delete_comment(app_id: str, comment_id: str, request: Request):
     record  = _get_or_404(user_id, app_id)
 
     original_len = len(record.get("comments", []))
-    deleted = [c for c in record.get("comments", []) if c["id"] == comment_id]
-    record["comments"] = [c for c in record.get("comments", []) if c["id"] != comment_id]
+    deleted = [c for c in record.get("comments", []) if c.get("id") == comment_id]
+    record["comments"] = [c for c in record.get("comments", []) if c.get("id") != comment_id]
 
     if len(record["comments"]) == original_len:
         raise HTTPException(404, "Comment not found")

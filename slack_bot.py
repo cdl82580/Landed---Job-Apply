@@ -178,6 +178,51 @@ def _fields_blocks(title: str, pairs: list[tuple[str, str]]) -> list[dict]:
 app = App(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 
 # ---------------------------------------------------------------------------
+# Access control — this bot operates a single Job Apply account (Corey's) via
+# a shared BOT_API_KEY with no further per-user check downstream. Without
+# this gate, any Slack workspace member/guest who can DM or slash-command the
+# bot would have full control of that account: delete tracked applications,
+# overwrite the master resume, or trigger paid Claude/Drive runs. Restrict
+# every listener to the one allowed user, the same way /run-tests already
+# restricts itself. Left unset, this fails open (matches SLACK_NOTIFY_USER_ID's
+# existing "unset = feature off for this deployment" convention) — set it as
+# a Fly secret on any workspace with more than one member.
+# ---------------------------------------------------------------------------
+_ALLOWED_SLACK_USER_ID = os.environ.get("SLACK_NOTIFY_USER_ID", "")
+
+
+def _extract_slack_user_id(body: dict) -> str:
+    """Best-effort caller Slack user ID across the different payload shapes
+    Bolt hands middleware: slash commands (user_id), block actions / view
+    submissions (user.id), and events (event.user)."""
+    if not isinstance(body, dict):
+        return ""
+    if body.get("user_id"):
+        return str(body["user_id"])
+    user = body.get("user")
+    if isinstance(user, dict) and user.get("id"):
+        return str(user["id"])
+    if isinstance(user, str) and user:
+        return user
+    event = body.get("event")
+    if isinstance(event, dict) and event.get("user"):
+        return str(event["user"])
+    return ""
+
+
+@app.middleware
+def _restrict_to_owner(body: dict, next):
+    if not _ALLOWED_SLACK_USER_ID:
+        next()
+        return
+    caller = _extract_slack_user_id(body)
+    if caller and caller != _ALLOWED_SLACK_USER_ID:
+        print(f"[slack_bot] ignored interaction from unauthorized user {caller}")
+        return  # swallow — no next(), no response sent
+    next()
+
+
+# ---------------------------------------------------------------------------
 # API helpers — agent runs
 # ---------------------------------------------------------------------------
 

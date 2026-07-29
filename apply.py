@@ -43,6 +43,7 @@ if _env_path.exists():
             os.environ.setdefault(_k.strip(), _v.strip())
 
 from scripts.brand_color import get_brand_color, get_brand_logo
+from scripts.ssrf import is_ssrf_url
 
 try:
     import anthropic
@@ -525,7 +526,7 @@ Produce a JSON object with exactly these keys:
   "framing_angle": "string - 1-2 sentences describing the single narrative thread to run through the entire resume and cover letter",
   "tagline": "string - new tagline for the resume header (1 sentence, punchy, matches framing angle, MUST be under 100 characters)",
   "top_jd_requirements": ["string", "string", "string", "string", "string"],
-  "competencies": ["14 strings, one per cell, in order: row1col1, row1col2, row1col3, row1col4, row1col5, row2col1, row2col2, row2col3, row2col4, row2col5, row3col1, row3col2, row3col3, row3col4"],
+  "competencies": ["15 strings, one per cell, in order: row1col1, row1col2, row1col3, row1col4, row1col5, row2col1, row2col2, row2col3, row2col4, row2col5, row3col1, row3col2, row3col3, row3col4, row3col5"],
   "ehealth_title_subtitle": "string - the subtitle bar text for eHealth (e.g. 'AI Solutions & Integration Engineer  |  Subtitle  |  Tray.ai Platform Owner')",
   "ehealth_bullets": ["6 strings - complete bullet text for each of the 6 eHealth bullets"],
   "hsp_bullets": ["4 strings - complete bullet text for each of the 4 HSP Group bullets"],
@@ -899,11 +900,19 @@ def step7_cleanup(config: WorkflowConfig):
 # ---------------------------------------------------------------------------
 
 def escape_js_string(s: str) -> str:
-    """Escape a string for embedding in a JS double-quoted string."""
+    """Escape a string for embedding in a JS double-quoted string.
+
+    Claude's JSON responses can legitimately contain embedded newlines
+    (valid inside a JSON string, decoded to real \\n/\\r by json.loads) —
+    left unescaped here they'd terminate the JS string literal early and
+    crash the generated Node script, so they're escaped like any other
+    special character rather than relying on callers to strip them first.
+    """
     s = s.replace("\\", "\\\\")
     s = s.replace("`", "\\`")
     s = s.replace("${", "\\${")
     s = s.replace('"', '\\"')
+    s = s.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
     return s
 
 # ---------------------------------------------------------------------------
@@ -1204,6 +1213,17 @@ _SCOPES    = ["https://www.googleapis.com/auth/drive.file"]
 _GDRIVE_TOKEN_TIGRIS_KEY = "system/gdrive_token.json"
 
 
+def _write_gdrive_token(content: str) -> None:
+    """Write the Drive OAuth token to disk restricted to the owner — it
+    contains a long-lived refresh token, so it shouldn't be world/group
+    readable under a permissive umask."""
+    GDRIVE_TOKEN_PATH.write_text(content)
+    try:
+        os.chmod(GDRIVE_TOKEN_PATH, 0o600)
+    except OSError:
+        pass
+
+
 def _seed_gdrive_token() -> None:
     """Materialize the Drive token to disk, preferring the Tigris-persisted copy.
 
@@ -1219,7 +1239,7 @@ def _seed_gdrive_token() -> None:
         from scripts import storage
         tigris_token = storage.get_text(_GDRIVE_TOKEN_TIGRIS_KEY)
         if tigris_token:
-            GDRIVE_TOKEN_PATH.write_text(tigris_token)
+            _write_gdrive_token(tigris_token)
             return
     except Exception:
         pass
@@ -1227,7 +1247,7 @@ def _seed_gdrive_token() -> None:
     # so future restarts use Tigris (and get refreshes) rather than the stale secret.
     token_json = os.environ.get("GDRIVE_TOKEN_JSON", "").strip()
     if token_json:
-        GDRIVE_TOKEN_PATH.write_text(token_json)
+        _write_gdrive_token(token_json)
         _persist_gdrive_token()
 
 
@@ -1262,7 +1282,7 @@ def _gdrive_service(config: WorkflowConfig):
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
-                GDRIVE_TOKEN_PATH.write_text(creds.to_json())
+                _write_gdrive_token(creds.to_json())
                 _persist_gdrive_token()
             except Exception as refresh_err:
                 # invalid_grant means the token is permanently revoked — remove it
@@ -1278,7 +1298,7 @@ def _gdrive_service(config: WorkflowConfig):
             flow  = InstalledAppFlow.from_client_secrets_file(str(GDRIVE_CREDS_PATH), _SCOPES)
             creds = flow.run_local_server(port=0)
             GDRIVE_TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
-            GDRIVE_TOKEN_PATH.write_text(creds.to_json())
+            _write_gdrive_token(creds.to_json())
         else:
             config.progress("  ⚠ Drive upload skipped — set GDRIVE_TOKEN_JSON secret to enable")
             return None
@@ -1324,21 +1344,25 @@ def _ensure_run_folder(service, company_safe: str, role_safe: str, config: Workf
     Returns (folder_id, webViewLink). Idempotent — safe to call repeatedly.
     """
     if config.user_label:
-        user_folder_id, _, user_created = _gdrive_get_or_create_folder(
+        user_folder_id, _, _ = _gdrive_get_or_create_folder(
             service, config.user_label, GDRIVE_PARENT_FOLDER_ID
         )
         config.progress(f"  ✓ Drive user folder: {config.user_label}")
-        if user_created:
-            _set_link_viewer(service, user_folder_id, config.progress)
         run_parent_id = user_folder_id
     else:
         run_parent_id = GDRIVE_PARENT_FOLDER_ID
 
     run_folder_name = f"{company_safe}_{role_safe}"
-    run_folder_id, folder_url, _ = _gdrive_get_or_create_folder(
+    run_folder_id, folder_url, run_created = _gdrive_get_or_create_folder(
         service, run_folder_name, run_parent_id
     )
     config.progress(f"  ✓ Drive run folder: {run_folder_name}")
+    if run_created:
+        # Share only this run's folder, not the parent user folder — the parent
+        # accumulates every application the user ever generates, so sharing it
+        # (which Drive permissions inherit to all children) would let one leaked
+        # link expose the user's entire application history instead of just this run.
+        _set_link_viewer(service, run_folder_id, config.progress)
     return run_folder_id, folder_url
 
 
@@ -1519,19 +1543,21 @@ def _upload_single_to_drive(
             return None
 
         if config.user_label:
-            user_folder_id, _, user_created = _gdrive_get_or_create_folder(
+            user_folder_id, _, _ = _gdrive_get_or_create_folder(
                 service, config.user_label, GDRIVE_PARENT_FOLDER_ID
             )
-            if user_created:
-                _set_link_viewer(service, user_folder_id, config.progress)
             run_parent_id = user_folder_id
         else:
             run_parent_id = GDRIVE_PARENT_FOLDER_ID
 
-        folder_id, folder_url, _ = _gdrive_get_or_create_folder(
+        folder_id, folder_url, folder_created = _gdrive_get_or_create_folder(
             service, folder_name, run_parent_id
         )
         config.progress(f"  ✓ Drive folder: {folder_name}")
+        if folder_created:
+            # Share only this run's folder — see _ensure_run_folder for why the
+            # parent user folder is deliberately left unshared.
+            _set_link_viewer(service, folder_id, config.progress)
 
         media = MediaFileUpload(str(file_path), mimetype=_MIME_DOCX, resumable=False)
         service.files().create(
@@ -1836,6 +1862,9 @@ def extract_job_description_from_url(url: str, config: WorkflowConfig) -> str | 
     Returns the extracted text, or None on fetch failure / no posting found.
     Best-effort — never raises.
     """
+    if is_ssrf_url(url):
+        config.progress("  ⚠ Posting URL resolves to a private/internal address, skipping fetch")
+        return None
     try:
         import requests
         resp = requests.get(
@@ -3016,7 +3045,7 @@ Return ONLY valid JSON. No preamble, no markdown fences."""
         interviewer=config.interviewer,
         output_path=docx_path,
     )
-    script_path = Path("thankyou_gen.js")
+    script_path = run_dir / f"thankyou_gen_{os.urandom(4).hex()}.js"
     script_path.write_text(js_script, encoding="utf-8")
     run(["node", str(script_path)], config=wfc)
     script_path.unlink(missing_ok=True)

@@ -23,6 +23,7 @@ def _mock_download_response(content: bytes, content_length: str | None = None) -
     resp.__enter__.return_value = resp
     resp.__exit__.return_value = False
     resp.raise_for_status.return_value = None
+    resp.is_redirect = False
     resp.headers = {"Content-Length": content_length} if content_length is not None else {}
     resp.iter_content.return_value = [content] if content else []
     resp.content = content
@@ -330,6 +331,24 @@ class TestHandleFileUpload:
         assert result is True
         assert "Could not read the uploaded file" in sent_texts(ctx)[0]
 
+    async def test_redirect_response_rejected(self, bot):
+        """A redirect off a trusted download host must not be followed — the
+        trusted-host check only covers the original URL, not wherever a
+        redirect might point."""
+        att = make_file_attachment()
+        ctx = make_ctx(attachments=[att])
+        redirect_resp = MagicMock()
+        redirect_resp.__enter__.return_value = redirect_resp
+        redirect_resp.__exit__.return_value = False
+        redirect_resp.is_redirect = True
+        redirect_resp.status_code = 302
+        with patch("requests.get", return_value=redirect_resp) as mock_get:
+            result = await bot._handle_file_upload(ctx, {"email": "a@b.com"})
+        mock_get.assert_called_once()
+        assert mock_get.call_args.kwargs.get("allow_redirects") is False
+        assert result is True
+        assert "Could not download the file" in sent_texts(ctx)[0]
+
     async def test_download_failure_sends_error_and_returns_true(self, bot):
         att = make_file_attachment()
         ctx = make_ctx(attachments=[att])
@@ -396,6 +415,7 @@ class TestHandleFileUpload:
         resp.__enter__.return_value = resp
         resp.__exit__.return_value = False
         resp.raise_for_status.return_value = None
+        resp.is_redirect = False
         resp.headers = {}  # no Content-Length at all
         resp.iter_content.return_value = [oversized_chunk]
         with patch("requests.get", return_value=resp), \

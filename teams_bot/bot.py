@@ -101,10 +101,10 @@ _TEAMS_FILE_DOWNLOAD_CONTENT_TYPE = "application/vnd.microsoft.teams.file.downlo
 # effectively Microsoft-controlled today, but nothing else validates it. Cap
 # it to the hosts Teams file attachments actually resolve to.
 _TRUSTED_DOWNLOAD_HOST_SUFFIXES = (
-    ".sharepoint.com",
-    ".sharepointonline.com",
-    ".officeapps.live.com",
-    ".msteams.api.skype.com",
+    "sharepoint.com",
+    "sharepointonline.com",
+    "officeapps.live.com",
+    "msteams.api.skype.com",
     "graph.microsoft.com",
 )
 
@@ -114,7 +114,15 @@ def _is_trusted_download_host(url: str) -> bool:
         host = (urlparse(url).hostname or "").lower()
     except ValueError:
         return False
-    return host.endswith(_TRUSTED_DOWNLOAD_HOST_SUFFIXES)
+    if not host:
+        return False
+    # Dot-boundary suffix match: host must equal a trusted domain or be a
+    # subdomain of one. A bare endswith() (the previous implementation for
+    # "graph.microsoft.com") also matches any host with that string as a
+    # literal tail, e.g. "evilgraph.microsoft.com" — still under Microsoft's
+    # own DNS today so not currently exploitable, but the wrong shape for a
+    # host allowlist in general.
+    return any(host == d or host.endswith("." + d) for d in _TRUSTED_DOWNLOAD_HOST_SUFFIXES)
 
 
 # Matches the 10 MB cap api.py's /api/profile/resume enforces — checked here
@@ -128,14 +136,27 @@ class _DownloadTooLarge(Exception):
     pass
 
 
+class _UntrustedRedirect(Exception):
+    pass
+
+
 def _download_capped(url: str, max_bytes: int, timeout: int = 30) -> bytes:
     """GET url and return its body, aborting as soon as it's clear the
     response exceeds max_bytes — via Content-Length when the server sends
     one, and unconditionally while streaming otherwise (a missing or
-    understated Content-Length must not bypass the cap)."""
+    understated Content-Length must not bypass the cap).
+
+    Redirects are not followed: the trusted-host check the caller runs
+    against `url` only covers that URL, not wherever a redirect might
+    point, so a followed redirect could land somewhere unvalidated
+    (matching how scripts/webhooks.py handles this same risk)."""
     import requests
 
-    with requests.get(url, timeout=timeout, stream=True) as resp:
+    with requests.get(url, timeout=timeout, stream=True, allow_redirects=False) as resp:
+        if resp.is_redirect:
+            raise _UntrustedRedirect(
+                f"refusing to follow redirect ({resp.status_code}) from download host"
+            )
         resp.raise_for_status()
         content_length = resp.headers.get("Content-Length")
         if content_length is not None and int(content_length) > max_bytes:

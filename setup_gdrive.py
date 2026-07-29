@@ -69,6 +69,11 @@ def main():
 
         TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
         TOKEN_PATH.write_text(creds.to_json())
+        # Contains a long-lived refresh token — restrict to the owner.
+        try:
+            os.chmod(TOKEN_PATH, 0o600)
+        except OSError:
+            pass
         print(f"Token saved to {TOKEN_PATH}")
     else:
         print(f"Existing token is valid — no browser needed.")
