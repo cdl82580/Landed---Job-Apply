@@ -455,7 +455,7 @@ async def create_application(body: ApplicationCreate, request: Request, response
         # Pin this browser to the machine holding the pipeline's in-memory queue
         if FLY_MACHINE_ID:
             response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID,
-                                path="/", samesite="lax", httponly=True)
+                                path="/", samesite="lax", httponly=True, secure=True)
 
     return {**record, "pipeline_started": pipeline_started}
 
@@ -527,7 +527,7 @@ async def update_application(app_id: str, body: ApplicationUpdate, request: Requ
         pipeline_started = True
         if FLY_MACHINE_ID:
             response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID,
-                                path="/", samesite="lax", httponly=True)
+                                path="/", samesite="lax", httponly=True, secure=True)
 
     return {**record, "pipeline_started": pipeline_started}
 
@@ -795,7 +795,7 @@ async def setup_folder(app_id: str, request: Request, response: Response):
     )
     if FLY_MACHINE_ID:
         response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID,
-                            path="/", samesite="lax", httponly=True)
+                            path="/", samesite="lax", httponly=True, secure=True)
     return {"status": "started"}
 
 
@@ -826,7 +826,7 @@ async def pipeline_with_manual_jd(
     )
     if FLY_MACHINE_ID:
         response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID,
-                            path="/", samesite="lax", httponly=True)
+                            path="/", samesite="lax", httponly=True, secure=True)
     return {"status": "started"}
 
 

@@ -91,7 +91,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - Admin-managed via the Knowledge Base tab in `/admin.html`
 - Quill WYSIWYG editor with Source/Preview toggle in the article drawer
 - Categories with icon (emoji), label, description, and optional `adminOnly` flag
-- Seed endpoint (`POST /api/admin/kb/seed-from-file`) re-extracts the built-in article set from `frontend/kb.html` via Node.js
+- Seed endpoint (`POST /api/admin/kb/seed-from-file`) re-extracts the built-in article set from `frontend/kb.html`'s `const KB = {...}` literal, parsed directly in Python (`scripts/js_object_parser.py`) rather than via Node/`eval()`
 - Stored as a single JSON blob in Tigris (`kb/data.json`); seed data auto-applied if no blob exists yet
 
 ### Support Chatbot
@@ -645,7 +645,7 @@ See `JobApply.postman_collection.json` for the full request/response reference.
 | PUT | `/api/admin/kb/categories/{id}` | admin | Update KB category |
 | DELETE | `/api/admin/kb/categories/{id}` | admin | Delete KB category |
 | POST | `/api/admin/kb/seed` | admin | Replace entire KB from JSON payload |
-| POST | `/api/admin/kb/seed-from-file` | admin | Re-extract KB from `frontend/kb.html` via Node.js and seed to Tigris |
+| POST | `/api/admin/kb/seed-from-file` | admin | Re-extract KB from `frontend/kb.html` (parsed in Python, no Node/`eval()`) and seed to Tigris |
 | GET | `/api/notifications/action?token=` | — | Consume a signed one-time notification token (from nudge/follow-up emails) — executes `status` or `snooze` action; redirects to tracker on success |
 | GET | `/api/notifications/confirm-applied?token=` | — | Signed-token date picker page for "Applied" status without a pre-set date |
 | POST | `/api/notifications/confirm-applied` | — | Submit the applied date from the confirm-applied form |

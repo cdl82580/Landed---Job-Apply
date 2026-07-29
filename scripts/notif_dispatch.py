@@ -13,6 +13,7 @@ of imports already present there.
 
 from __future__ import annotations
 
+import html as _html
 import logging
 import os
 import time
@@ -26,6 +27,13 @@ _FROM_ADDRESS     = os.environ.get("RESEND_FROM", "Job Apply <onboarding@resend.
 _APP_URL          = os.environ.get("APP_URL", "https://apply.cdlav.us")
 _LOGO_URL         = f"{_APP_URL}/img/logo.png"
 _LOGODEV_PUB_KEY  = os.environ.get("LOGODEV_PUBLIC_KEY") or os.environ.get("LOGODEV_API_KEY", "")
+
+
+def _esc_html(s) -> str:
+    """HTML-escape application-supplied text (company, role, location, etc.)
+    before interpolating it into an email's HTML body — see api.py's
+    _esc_html for the full rationale."""
+    return _html.escape(str(s or ""), quote=True)
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +176,7 @@ def notify_new_application(user_id: str, record: dict[str, Any]) -> None:
                 friendly = record["date_applied"]
             applied_html = (
                 f'<tr><td style="padding:.375rem 0;color:#6B7280;font-size:.875rem;width:110px">Applied</td>'
-                f'<td style="padding:.375rem 0;color:#374151;font-size:.875rem">{friendly}</td></tr>'
+                f'<td style="padding:.375rem 0;color:#374151;font-size:.875rem">{_esc_html(friendly)}</td></tr>'
             )
 
         score_line = ""
@@ -184,10 +192,10 @@ def notify_new_application(user_id: str, record: dict[str, Any]) -> None:
             s_bg, s_color = _score_pill_style.get(cat, ("#F3F4F6", "#374151"))
             score_line = (
                 f'<p style="margin:.75rem 0 0;font-size:.875rem">'
-                f'Match score: <strong>{ms["score"]}</strong> &nbsp;'
+                f'Match score: <strong>{_esc_html(ms["score"])}</strong> &nbsp;'
                 f'<span style="display:inline-block;background:{s_bg};color:{s_color};'
                 f'padding:.15rem .55rem;border-radius:999px;font-size:.8rem;font-weight:600">'
-                f'{cat}</span></p>'
+                f'{_esc_html(cat)}</span></p>'
             )
 
         company_heading = (
@@ -202,7 +210,7 @@ def notify_new_application(user_id: str, record: dict[str, Any]) -> None:
         body_html = f"""
         {company_heading}
         <p style="color:#6B7280;font-size:.875rem;margin:0 0 1.25rem">
-          {company} &mdash; {role}
+          {_esc_html(company)} &mdash; {_esc_html(role)}
         </p>
         <table width="100%" cellpadding="0" cellspacing="0"
                style="border-collapse:collapse;margin-bottom:1.25rem">
@@ -212,7 +220,7 @@ def notify_new_application(user_id: str, record: dict[str, Any]) -> None:
           </tr>
           {applied_html}
           {'<tr><td style="padding:.375rem 0;color:#6B7280;font-size:.875rem;width:110px">Location</td>'
-           f'<td style="padding:.375rem 0;color:#374151;font-size:.875rem">{record["location"]}</td></tr>'
+           f'<td style="padding:.375rem 0;color:#374151;font-size:.875rem">{_esc_html(record["location"])}</td></tr>'
            if record.get("location") else ""}
         </table>
         {score_line}
@@ -277,7 +285,7 @@ def _status_pill(status: str) -> str:
     return (
         f'<span style="display:inline-block;background:{bg};color:{color};'
         f'padding:.2rem .65rem;border-radius:999px;font-size:.85rem;font-weight:600">'
-        f'{emoji}&nbsp;{status}</span>'
+        f'{emoji}&nbsp;{_esc_html(status)}</span>'
     )
 
 
@@ -291,7 +299,7 @@ def _company_logo_html(record: dict[str, Any], size: int = 32) -> str:
     if not logo:
         return ""
     return (
-        f'<img src="{logo}" alt="" width="{size}" height="{size}" '
+        f'<img src="{_esc_html(logo)}" alt="" width="{size}" height="{size}" '
         f'style="display:inline-block;vertical-align:middle;border-radius:6px;'
         f'border:1px solid #E5E7EB">'
     )
@@ -327,14 +335,14 @@ def notify_status_changed(
             f'<tr>'
             f'{"<td style=\"vertical-align:middle;padding-right:.5rem\">" + logo_html + "</td>" if logo_html else ""}'
             f'<td style="vertical-align:middle">'
-            f'<h2 style="color:#1A3C5E;margin:0;font-size:1.1rem">Status update: {company}</h2>'
+            f'<h2 style="color:#1A3C5E;margin:0;font-size:1.1rem">Status update: {_esc_html(company)}</h2>'
             f'</td></tr></table>'
         )
 
         body_html = f"""
         {company_heading}
         <p style="color:#6B7280;font-size:.875rem;margin:0 0 1.5rem">
-          {role}
+          {_esc_html(role)}
         </p>
         <table width="100%" cellpadding="0" cellspacing="0"
                style="border-collapse:collapse;margin-bottom:1.5rem">

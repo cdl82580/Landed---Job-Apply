@@ -117,6 +117,39 @@ def _is_trusted_download_host(url: str) -> bool:
     return host.endswith(_TRUSTED_DOWNLOAD_HOST_SUFFIXES)
 
 
+# Matches the 10 MB cap api.py's /api/profile/resume enforces — checked here
+# too so an oversized file gets rejected while streaming instead of being
+# buffered fully into this process's memory first (this bot's VM only has
+# 512 MB) and rejected only after the fact by the API.
+_MAX_RESUME_DOWNLOAD_BYTES = 10 * 1024 * 1024
+
+
+class _DownloadTooLarge(Exception):
+    pass
+
+
+def _download_capped(url: str, max_bytes: int, timeout: int = 30) -> bytes:
+    """GET url and return its body, aborting as soon as it's clear the
+    response exceeds max_bytes — via Content-Length when the server sends
+    one, and unconditionally while streaming otherwise (a missing or
+    understated Content-Length must not bypass the cap)."""
+    import requests
+
+    with requests.get(url, timeout=timeout, stream=True) as resp:
+        resp.raise_for_status()
+        content_length = resp.headers.get("Content-Length")
+        if content_length is not None and int(content_length) > max_bytes:
+            raise _DownloadTooLarge(f"reported size {content_length} bytes exceeds {max_bytes}")
+        chunks = []
+        total = 0
+        for chunk in resp.iter_content(chunk_size=256 * 1024):
+            total += len(chunk)
+            if total > max_bytes:
+                raise _DownloadTooLarge(f"exceeded {max_bytes} bytes while downloading")
+            chunks.append(chunk)
+        return b"".join(chunks)
+
+
 CARDS_DIR = Path(__file__).parent / "cards"
 
 VALID_STATUSES = [
@@ -1081,10 +1114,14 @@ class JobApplyBot(ActivityHandler):
 
         try:
             # downloadUrl is pre-authenticated by Teams — no bearer token needed.
-            import requests
-            resp = await asyncio.to_thread(requests.get, file_info.download_url, timeout=30)
-            resp.raise_for_status()
-            file_bytes = resp.content
+            file_bytes = await asyncio.to_thread(
+                _download_capped, file_info.download_url, _MAX_RESUME_DOWNLOAD_BYTES
+            )
+        except _DownloadTooLarge:
+            await ctx.send_activity(MessageFactory.text(
+                "❌ That file is too large — resumes must be under 10 MB."
+            ))
+            return True
         except Exception as exc:
             await ctx.send_activity(MessageFactory.text(f"❌ Could not download the file: {exc}"))
             return True

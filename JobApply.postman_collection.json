@@ -1910,7 +1910,7 @@
           "request": {
             "method": "POST",
             "url": "{{base_url}}/api/admin/kb/seed-from-file",
-            "description": "Server-side extraction: runs a Node.js script to parse the `const KB = {...}` object out of `frontend/kb.html` and seeds Tigris. Used to sync the hardcoded frontend KB into persistent storage without manually copying JSON. Requires Node.js to be present on the server."
+            "description": "Server-side extraction: parses the `const KB = {...}` object out of `frontend/kb.html` in Python (scripts/js_object_parser.py) and seeds Tigris. Used to sync the hardcoded frontend KB into persistent storage without manually copying JSON. No Node.js/eval() involved — the parser only ever produces plain data or raises."
           }
         }
       ]

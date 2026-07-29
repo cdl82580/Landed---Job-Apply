@@ -80,6 +80,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import html as _html
 import json
 import logging
 import os
@@ -434,6 +435,17 @@ _LOGO_URL        = f"{_APP_URL}/img/logo.png"
 _LOGODEV_PUB_KEY = os.environ.get("LOGODEV_PUBLIC_KEY") or os.environ.get("LOGODEV_API_KEY", "")
 
 
+def _esc_html(s) -> str:
+    """HTML-escape user/application-supplied text before interpolating it into
+    an email's HTML body (display_name, company, role, event title, status —
+    anything not written by us). These emails only ever go to the account
+    that owns the data, so this isn't a cross-user attack vector, but company/
+    role can originate from a scraped job posting rather than something the
+    user typed themselves, so it's not purely self-authored either — escape
+    unconditionally rather than trying to tell those cases apart."""
+    return _html.escape(str(s or ""), quote=True)
+
+
 def _email_html(body_html: str) -> str:
     """Wrap body_html in the branded email shell."""
     return f"""<!DOCTYPE html>
@@ -530,7 +542,7 @@ def _send_verification_email(to: str, display_name: str, token: str) -> bool:
     body_html = f"""
     <h2 style="color:#1A3C5E;margin:0 0 .75rem;font-size:1.25rem">Verify your email</h2>
     <p style="margin:0 0 1.5rem;color:#374151">
-      Hi {display_name}, click the button below to verify your email address.
+      Hi {_esc_html(display_name)}, click the button below to verify your email address.
     </p>
     <a href="{verify_url}"
        style="display:inline-block;background:#1A3C5E;color:#FFFFFF;text-decoration:none;
@@ -755,7 +767,7 @@ def _fire_reminder(user_id: str, reminder: dict, event: dict) -> None:
     if "email" in channels and _NOTIFY_EMAIL:
         body_html = f"""
         <h2 style="color:#1A3C5E;margin:0 0 .75rem;font-size:1.25rem">
-          &#128197; {title}
+          &#128197; {_esc_html(title)}
         </h2>
         <p style="margin:0 0 .5rem;color:#374151">
           <strong>Time:</strong> {dt_label} ({tz_label})
@@ -851,7 +863,7 @@ def _researching_nudge_email(
     body_html = f"""
     {_company_heading_html(app, f"Did you apply to {company}?")}
     <p style="color:#6B7280;font-size:.875rem;margin:0 0 .625rem">
-      {role} &mdash; {_digest_status_pill("Researching")} &mdash; {days} day{'s' if days != 1 else ''}
+      {_esc_html(role)} &mdash; {_digest_status_pill("Researching")} &mdash; {days} day{'s' if days != 1 else ''}
     </p>
     <p style="color:#374151;margin:0 0 1.5rem">
       You&rsquo;ve had this one open for a while. What&rsquo;s the status?
@@ -947,7 +959,7 @@ def _follow_up_reminder_email(
     body_html = f"""
     {_company_heading_html(app, f"Have you heard back from {company}?")}
     <p style="color:#6B7280;font-size:.875rem;margin:0 0 .625rem">
-      {role} &mdash; {_digest_status_pill("Applied")} &mdash; {days} day{'s' if days != 1 else ''} ago
+      {_esc_html(role)} &mdash; {_digest_status_pill("Applied")} &mdash; {days} day{'s' if days != 1 else ''} ago
     </p>
     <p style="color:#374151;margin:0 0 1.5rem">
       No movement yet. Time to follow up or move on?
@@ -1030,7 +1042,7 @@ def _gone_silent_email(user_email: str, user_id: str, app: dict) -> None:
     body_html = f"""
     {_company_heading_html(app, f"Gone quiet: {company}")}
     <p style="color:#6B7280;font-size:.875rem;margin:0 0 .625rem">
-      {role} &mdash; {_digest_status_pill(status)} &mdash; {days} day{'s' if days != 1 else ''} with no update
+      {_esc_html(role)} &mdash; {_digest_status_pill(status)} &mdash; {days} day{'s' if days != 1 else ''} with no update
     </p>
     <p style="color:#374151;margin:0 0 1.5rem">
       No activity in a while. Time to close this one out or snooze it?
@@ -1112,7 +1124,7 @@ def _digest_status_pill(status: str) -> str:
     return (
         f'<span style="display:inline-block;background:{bg};color:{color};'
         f'padding:.15rem .55rem;border-radius:999px;font-size:.8rem;font-weight:600;'
-        f'white-space:nowrap">{emoji}&nbsp;{status}</span>'
+        f'white-space:nowrap">{emoji}&nbsp;{_esc_html(status)}</span>'
     )
 
 
@@ -1124,7 +1136,7 @@ def _digest_company_cell(a: dict) -> str:
         if domain and _LOGODEV_PUB_KEY:
             logo_url = f"https://img.logo.dev/{domain}?token={_LOGODEV_PUB_KEY}&size=16"
     logo_html = (
-        f'<img src="{logo_url}" alt="" width="16" height="16" '
+        f'<img src="{_esc_html(logo_url)}" alt="" width="16" height="16" '
         f'style="display:inline-block;vertical-align:middle;border-radius:3px;'
         f'margin-right:.375rem;border:0">'
         if logo_url else ""
@@ -1132,7 +1144,7 @@ def _digest_company_cell(a: dict) -> str:
     return (
         f'<td style="padding:.5rem .5rem;color:#374151;font-size:.875rem;'
         f'vertical-align:middle;white-space:nowrap">'
-        f'{logo_html}<span style="vertical-align:middle">{company}</span></td>'
+        f'{logo_html}<span style="vertical-align:middle">{_esc_html(company)}</span></td>'
     )
 
 
@@ -1146,7 +1158,7 @@ def _app_logo_html(app: dict, size: int = 32) -> str:
     if not logo:
         return ""
     return (
-        f'<img src="{logo}" alt="" width="{size}" height="{size}" '
+        f'<img src="{_esc_html(logo)}" alt="" width="{size}" height="{size}" '
         f'style="display:inline-block;vertical-align:middle;border-radius:6px;'
         f'border:1px solid #E5E7EB">'
     )
@@ -1163,7 +1175,7 @@ def _company_heading_html(app: dict, title: str) -> str:
         f'<table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:.375rem">'
         f'<tr>{logo_cell}'
         f'<td style="vertical-align:middle">'
-        f'<h2 style="color:#1A3C5E;margin:0;font-size:1.1rem">{title}</h2>'
+        f'<h2 style="color:#1A3C5E;margin:0;font-size:1.1rem">{_esc_html(title)}</h2>'
         f'</td></tr></table>'
     )
 
@@ -1192,7 +1204,7 @@ def _daily_digest_email(user_email: str, user_id: str, apps: list[dict]) -> None
         return (
             f"<tr>"
             f"{_digest_company_cell(a)}"
-            f"<td style='padding:.5rem .5rem;color:#6B7280;font-size:.875rem;vertical-align:middle'>{a.get('role_title','')}</td>"
+            f"<td style='padding:.5rem .5rem;color:#6B7280;font-size:.875rem;vertical-align:middle'>{_esc_html(a.get('role_title',''))}</td>"
             f"<td style='padding:.5rem .5rem;vertical-align:middle'>{_digest_status_pill(a.get('status',''))}</td>"
             f"</tr>"
         )
@@ -1306,7 +1318,7 @@ def _weekly_digest_email(user_email: str, user_id: str, apps: list[dict]) -> Non
         silent_rows = "".join(
             f"<tr>"
             f"{_digest_company_cell(a)}"
-            f"<td style='padding:.5rem .5rem;color:#6B7280;font-size:.875rem;vertical-align:middle'>{a.get('role_title','')}</td>"
+            f"<td style='padding:.5rem .5rem;color:#6B7280;font-size:.875rem;vertical-align:middle'>{_esc_html(a.get('role_title',''))}</td>"
             f"<td style='padding:.5rem .5rem;vertical-align:middle'>{_digest_status_pill(a.get('status',''))}</td>"
             f"</tr>"
             for a in silent[:10]
@@ -1949,7 +1961,7 @@ async def register(
     response.set_cookie(_SESSION_COOKIE, token, max_age=86400 * _SESSION_DAYS,
                         httponly=True, samesite="lax", secure=True)
     if FLY_MACHINE_ID:
-        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True)
+        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True, secure=True)
     return response
 
 
@@ -1975,7 +1987,7 @@ async def login(req: LoginRequest, request: Request):
     response.set_cookie(_SESSION_COOKIE, token, max_age=86400 * _SESSION_DAYS,
                         httponly=True, samesite="lax", secure=True)
     if FLY_MACHINE_ID:
-        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True)
+        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True, secure=True)
     return response
 
 
@@ -2583,7 +2595,7 @@ async def create_run(req: RunRequest, request: Request, response: Response):
 
     # Pin this browser session to the machine that owns this run's state
     if FLY_MACHINE_ID:
-        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True)
+        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True, secure=True)
 
     def _run_fn(resume_path: Path, progress) -> WorkflowResult:
         config = WorkflowConfig(
@@ -2895,7 +2907,7 @@ async def create_prep(req: PrepRequest, request: Request, response: Response):
                       round_type=req.round_type)
 
     if FLY_MACHINE_ID:
-        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True)
+        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True, secure=True)
 
     def _prep_fn(resume_path: Path, progress) -> InterviewPrepResult:
         config = InterviewPrepConfig(
@@ -3065,7 +3077,7 @@ async def create_aq(req: AQRequest, request: Request, response: Response):
                       initiated_by=user_data["email"])
 
     if FLY_MACHINE_ID:
-        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True)
+        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True, secure=True)
 
     def _aq_worker():
         tmp = tempfile.NamedTemporaryFile(suffix=".docx", delete=False, dir="/tmp")
@@ -3258,7 +3270,7 @@ async def create_thankyou(req: ThankYouRequest, request: Request, response: Resp
                       initiated_by=user_data["email"])
 
     if FLY_MACHINE_ID:
-        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True)
+        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True, secure=True)
 
     def _ty_fn(resume_path: Path, progress) -> "ThankYouResult":
         from apply import ThankYouConfig, generate_thank_you_email
@@ -3433,7 +3445,7 @@ async def create_optimize(req: OptimizeRequest, request: Request, response: Resp
                       optimize_instruction=instruction)
 
     if FLY_MACHINE_ID:
-        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True)
+        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True, secure=True)
 
     def _opt_fn(resume_path: Path, progress) -> OptimizeResult:
         config = OptimizeConfig(
@@ -3693,7 +3705,7 @@ async def create_resume_builder(req: ResumeBuilderRequest, request: Request, res
                       user_email=user_data["email"], initiated_by=user_data["email"])
 
     if FLY_MACHINE_ID:
-        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True)
+        response.set_cookie("fly-force-instance-id", FLY_MACHINE_ID, path="/", samesite="lax", httponly=True, secure=True)
 
     threading.Thread(
         target=_resume_builder_worker,

@@ -211,5 +211,5 @@ async def google_callback(
     )
     response.delete_cookie(_NONCE_COOKIE)   # consumed — clear it
     if _fly_machine_id:
-        response.set_cookie("fly-force-instance-id", _fly_machine_id, path="/", samesite="lax", httponly=True)
+        response.set_cookie("fly-force-instance-id", _fly_machine_id, path="/", samesite="lax", httponly=True, secure=True)
     return response

@@ -11,12 +11,24 @@ import ipaddress
 import socket
 import urllib.parse
 
-PRIVATE_NETS = [
-    ipaddress.ip_network(n) for n in (
-        "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
-        "127.0.0.0/8", "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10",
+
+def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """True if ip is loopback/private/link-local/reserved/multicast/unspecified.
+
+    Unwraps IPv4-mapped IPv6 addresses (e.g. ::ffff:127.0.0.1) to their IPv4
+    form first — otherwise they'd be evaluated as plain IPv6 and could slip
+    past the equivalent IPv4 block (is_private etc. don't follow the mapping
+    automatically). Uses stdlib's built-in classifications rather than a
+    hand-maintained CIDR list, which also covers ranges like 0.0.0.0/8,
+    100.64.0.0/10 (carrier-grade NAT), and the IPv6 documentation/mapped
+    ranges that a short manual list would miss.
+    """
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return (
+        ip.is_private or ip.is_loopback or ip.is_link_local
+        or ip.is_reserved or ip.is_multicast or ip.is_unspecified
     )
-]
 
 
 def is_ssrf_url(url: str) -> bool:
@@ -27,7 +39,7 @@ def is_ssrf_url(url: str) -> bool:
         addrs  = socket.getaddrinfo(host, None)
         for _, _, _, _, sockaddr in addrs:
             ip = ipaddress.ip_address(sockaddr[0])
-            if any(ip in net for net in PRIVATE_NETS):
+            if _is_blocked_ip(ip):
                 return True
     except Exception:
         pass

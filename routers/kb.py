@@ -245,9 +245,23 @@ async def seed_kb(body: SeedPayload, request: Request):
 
 @router.post("/api/admin/kb/seed-from-file", status_code=200)
 async def seed_kb_from_file(request: Request):
-    """Extract KB data from frontend/kb.html via Node.js and seed to storage."""
-    import subprocess  # noqa: PLC0415
-    import os          # noqa: PLC0415
+    """Extract KB data from frontend/kb.html's `const KB = {...}` literal and
+    seed it to storage.
+
+    Parses the object literal directly in Python (scripts/js_object_parser)
+    instead of eval()-ing it in a spawned Node process. The old approach ran
+    whatever JavaScript happened to be in the file through eval() — harmless
+    only as long as kb.html can never be written by anything less trusted
+    than this endpoint's own admin-only callers. The parser below only ever
+    produces plain data (strings/numbers/lists/dicts) or raises; it has no
+    way to execute code, so this can no longer become a code-execution path
+    even if that assumption ever stops holding.
+    """
+    import os  # noqa: PLC0415
+
+    from scripts.js_object_parser import (  # noqa: PLC0415
+        JSObjectParseError, extract_balanced_braces, parse_js_object,
+    )
 
     admin = _require_admin(request)
 
@@ -257,55 +271,18 @@ async def seed_kb_from_file(request: Request):
     if not os.path.exists(kb_path):
         raise HTTPException(500, "frontend/kb.html not found on server")
 
-    # Node reads kb.html itself (by path) rather than receiving its content as
-    # part of the script — kb.html is large and growing, and embedding it in
-    # the -e argument hits the OS's exec() argument-length limit (E2BIG) once
-    # the file gets big enough, even though it's well under ARG_MAX alone —
-    # the container's environment block eats into the same budget.
-    node_script = r"""
-const fs = require('fs');
-const html = fs.readFileSync(process.argv[1], 'utf-8');
-const start = html.indexOf('const KB = {');
-if (start === -1) { console.error('KB const not found'); process.exit(1); }
-const sub = html.slice(start + 'const KB = '.length);
-let depth = 0, i = 0, inStr = false, strChar = '', inTemplate = 0;
-for (; i < sub.length; i++) {
-  const c = sub[i];
-  if (inStr) {
-    if (c === '\\') { i++; continue; }
-    if (c === strChar) inStr = false;
-    continue;
-  }
-  if (c === '`') { inTemplate = inTemplate ? 0 : 1; continue; }
-  if (inTemplate) { if (c === '\\') { i++; } continue; }
-  if (c === '"' || c === "'") { inStr = true; strChar = c; continue; }
-  if (c === '{') depth++;
-  else if (c === '}') { depth--; if (depth === 0) { i++; break; } }
-}
-const objSrc = sub.slice(0, i);
-let KB;
-try { KB = eval('(' + objSrc + ')'); } catch(e) { console.error('eval failed: ' + e.message); process.exit(1); }
-console.log(JSON.stringify(KB));
-"""
-    try:
-        result = subprocess.run(
-            ["node", "-e", node_script, kb_path],
-            capture_output=True, text=True, timeout=15,
-        )
-    except FileNotFoundError:
-        raise HTTPException(500, "Node.js not available on server")
-    except subprocess.TimeoutExpired:
-        raise HTTPException(500, "Node.js script timed out")
-    except OSError as e:
-        raise HTTPException(500, f"Failed to launch Node.js: {e}")
-
-    if result.returncode != 0:
-        raise HTTPException(500, f"KB extraction failed: {result.stderr.strip()}")
+    with open(kb_path, encoding="utf-8") as f:
+        html = f.read()
+    marker = "const KB = "
+    marker_pos = html.find(marker + "{")
+    if marker_pos == -1:
+        raise HTTPException(500, "KB const not found in frontend/kb.html")
 
     try:
-        kb_data = json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(500, f"KB JSON parse failed: {exc}")
+        obj_src = extract_balanced_braces(html, marker_pos + len(marker))
+        kb_data = parse_js_object(obj_src)
+    except JSObjectParseError as exc:
+        raise HTTPException(500, f"KB parsing failed: {exc}")
 
     now = _now()
     articles = []

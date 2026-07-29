@@ -15,6 +15,20 @@ from tests.teams.conftest import (
 )
 
 
+def _mock_download_response(content: bytes, content_length: str | None = None) -> MagicMock:
+    """Mimic requests.Response as used by bot._download_capped: usable as a
+    context manager, with .headers.get(...), .iter_content(), and
+    .raise_for_status() all behaving like the real thing."""
+    resp = MagicMock()
+    resp.__enter__.return_value = resp
+    resp.__exit__.return_value = False
+    resp.raise_for_status.return_value = None
+    resp.headers = {"Content-Length": content_length} if content_length is not None else {}
+    resp.iter_content.return_value = [content] if content else []
+    resp.content = content
+    return resp
+
+
 # ── _send_event_list ──────────────────────────────────────────────────────
 
 class TestSendEventList:
@@ -327,9 +341,7 @@ class TestHandleFileUpload:
     async def test_non_zip_bytes_sends_invalid_docx_error_and_returns_true(self, bot):
         att = make_file_attachment()
         ctx = make_ctx(attachments=[att])
-        bad_resp = MagicMock()
-        bad_resp.content = b"not a zip file"
-        bad_resp.raise_for_status.return_value = None
+        bad_resp = _mock_download_response(b"not a zip file")
         with patch("requests.get", return_value=bad_resp):
             result = await bot._handle_file_upload(ctx, {"email": "a@b.com"})
         assert result is True
@@ -338,28 +350,60 @@ class TestHandleFileUpload:
     async def test_success_uploads_resume_and_returns_true(self, bot):
         att = make_file_attachment(name="master.docx")
         ctx = make_ctx(attachments=[att])
-        good_resp = MagicMock()
-        good_resp.content = b"PK\x03\x04rest-of-zip-bytes"
-        good_resp.raise_for_status.return_value = None
+        content = b"PK\x03\x04rest-of-zip-bytes"
+        good_resp = _mock_download_response(content)
         with patch("requests.get", return_value=good_resp), \
              patch("api_client.upload_resume", return_value=None) as mock_upload:
             result = await bot._handle_file_upload(ctx, {"email": "a@b.com"})
         assert result is True
-        mock_upload.assert_called_once_with("master.docx", good_resp.content, user_email="a@b.com")
+        mock_upload.assert_called_once_with("master.docx", content, user_email="a@b.com")
         assert "master.docx" in sent_texts(ctx)[0]
         assert "saved as your master resume" in sent_texts(ctx)[0]
 
     async def test_upload_resume_error_sends_error_and_returns_true(self, bot):
         att = make_file_attachment(name="master.docx")
         ctx = make_ctx(attachments=[att])
-        good_resp = MagicMock()
-        good_resp.content = b"PK\x03\x04rest-of-zip-bytes"
-        good_resp.raise_for_status.return_value = None
+        good_resp = _mock_download_response(b"PK\x03\x04rest-of-zip-bytes")
         with patch("requests.get", return_value=good_resp), \
              patch("api_client.upload_resume", side_effect=Exception("save failed")):
             result = await bot._handle_file_upload(ctx, {"email": "a@b.com"})
         assert result is True
         assert "Failed to save resume" in sent_texts(ctx)[0]
+
+    async def test_oversized_content_length_rejected_before_download(self, bot):
+        """Content-Length alone should reject the file — iter_content must
+        never even be consulted."""
+        att = make_file_attachment(name="master.docx")
+        ctx = make_ctx(attachments=[att])
+        oversized_resp = _mock_download_response(
+            b"", content_length=str(11 * 1024 * 1024),
+        )
+        with patch("requests.get", return_value=oversized_resp), \
+             patch("api_client.upload_resume") as mock_upload:
+            result = await bot._handle_file_upload(ctx, {"email": "a@b.com"})
+        assert result is True
+        assert "too large" in sent_texts(ctx)[0].lower()
+        oversized_resp.iter_content.assert_not_called()
+        mock_upload.assert_not_called()
+
+    async def test_oversized_streamed_body_rejected_without_content_length(self, bot):
+        """A missing/understated Content-Length must not bypass the cap —
+        the streamed byte count itself has to enforce it."""
+        att = make_file_attachment(name="master.docx")
+        ctx = make_ctx(attachments=[att])
+        oversized_chunk = b"P" * (11 * 1024 * 1024)
+        resp = MagicMock()
+        resp.__enter__.return_value = resp
+        resp.__exit__.return_value = False
+        resp.raise_for_status.return_value = None
+        resp.headers = {}  # no Content-Length at all
+        resp.iter_content.return_value = [oversized_chunk]
+        with patch("requests.get", return_value=resp), \
+             patch("api_client.upload_resume") as mock_upload:
+            result = await bot._handle_file_upload(ctx, {"email": "a@b.com"})
+        assert result is True
+        assert "too large" in sent_texts(ctx)[0].lower()
+        mock_upload.assert_not_called()
 
 
 # ── _cmd_profile_guide ────────────────────────────────────────────────────

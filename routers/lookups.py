@@ -105,6 +105,15 @@ async def search_locations(request: Request, q: str = Query(..., min_length=2)):
 
 _SCORECARD_SEARCH = "https://api.data.gov/ed/collegescorecard/v1/schools"
 _SCORECARD_KEY = os.environ.get("COLLEGE_SCORECARD_API_KEY", "")
+
+# Plain HTTP is intentional, not an oversight — the host doesn't accept HTTPS
+# connections at all (port 443 connection-refused/times out; verified directly
+# rather than assumed), so switching the scheme would just break international
+# institution search. The request only carries a non-sensitive search term,
+# and the response is untrusted third-party data already: every field from it
+# is HTML-escaped before rendering (frontend/agents.html's rbInstitutionItemHtml)
+# and passed through _clean_domain() before use, so a tampered response can at
+# worst show a wrong/misleading suggestion — it can't inject markup or code.
 _HIPOLABS_SEARCH = "http://universities.hipolabs.com/search"
 
 
