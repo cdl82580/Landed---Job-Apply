@@ -10,8 +10,8 @@
     "termsOfUseUrl": "https://apply.cdlav.us/terms"
   },
   "name": {
-    "short": "Job Apply",
-    "full": "Job Apply Agent"
+    "short": "Landed",
+    "full": "Landed — AI Job Application Copilot"
   },
   "description": {
     "short": "AI-powered job application agent",
@@ -38,7 +38,7 @@
             { "title": "optimize", "description": "Refine existing run documents" },
             { "title": "tracker", "description": "Pipeline summary" },
             { "title": "track", "description": "Manage applications (list, add, view)" },
-            { "title": "confirm", "description": "Link your Teams identity to a Job Apply account" },
+            { "title": "confirm", "description": "Link your Teams identity to a Landed account" },
             { "title": "whoami", "description": "Show which account you're linked as" },
             { "title": "unlink", "description": "Remove your Teams identity's link" },
             { "title": "help", "description": "Command reference" }

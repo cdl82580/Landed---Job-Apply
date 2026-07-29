@@ -256,7 +256,7 @@ teams_bot/
 ├── manifest/              # Teams app manifest
 │   ├── manifest.json
 │   ├── outline.png / color.png    # required icons — Teams rejects the upload without both
-│   └── job-apply-teams-app.zip    # built sideload package (manifest.json + icons)
+│   └── landed-teams-app.zip       # built sideload package (manifest.json + icons)
 └── README.md
 
 routers/teams.py           # production mount point — POST /api/messages on the main FastAPI app

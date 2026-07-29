@@ -3,13 +3,13 @@ _metadata:
   minor_version: 1
 
 display_information:
-  name: Job Apply
+  name: Landed
   description: AI job search agent — resumes, cover letters, interview prep, emails & tracking, all from Slack.
   background_color: "#1A3C5E"
 
 features:
   bot_user:
-    display_name: Job Apply
+    display_name: Landed
     always_online: true
   app_home:
     home_tab_enabled: true
@@ -119,7 +119,7 @@ features:
       should_escape: false
     # System
     - command: /help
-      description: Show the full Job Apply command reference
+      description: Show the full Landed command reference
       usage_hint: (no arguments)
       should_escape: false
 

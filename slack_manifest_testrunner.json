@@ -4,13 +4,13 @@
     "minor_version": 1
   },
   "display_information": {
-    "name": "Job Apply — Test Runner",
-    "description": "Run automated test suites for the Job Apply app and get results in Slack.",
+    "name": "Landed — Test Runner",
+    "description": "Run automated test suites for the Landed app and get results in Slack.",
     "background_color": "#1A3C5E"
   },
   "features": {
     "bot_user": {
-      "display_name": "Job Apply Tests",
+      "display_name": "Landed Tests",
       "always_online": true
     },
     "slash_commands": [
