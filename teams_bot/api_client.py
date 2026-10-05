@@ -1,4 +1,4 @@
-"""HTTP client for the Job Apply FastAPI backend — mirrors slack_bot.py helpers.
+"""HTTP client for the Landed FastAPI backend — mirrors slack_bot.py helpers.
 
 Every call carries the shared BOT_API_KEY. Calls made on behalf of a linked
 Teams user also carry X-Teams-User-Email so the API resolves that specific

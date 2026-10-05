@@ -311,7 +311,7 @@ def _deliver(webhook: dict[str, Any], event: dict[str, Any]) -> None:
             ts_human = now_ts
 
         # Fallback text for push notifications
-        fallback = f"[Job Apply] {cat_emoji} {action} — {actor}"
+        fallback = f"[Landed] {cat_emoji} {action} — {actor}"
 
         # Header section
         blocks: list[dict] = [
@@ -361,9 +361,9 @@ def _deliver(webhook: dict[str, Any], event: dict[str, Any]) -> None:
             "@type":    "MessageCard",
             "@context": "http://schema.org/extensions",
             "themeColor": "1A3C5E",
-            "summary":  f"Job Apply — {action}",
+            "summary":  f"Landed — {action}",
             "sections": [{
-                "activityTitle":    f"**Job Apply** · `{action}`",
+                "activityTitle":    f"**Landed** · `{action}`",
                 "activitySubtitle": f"Actor: {actor}",
                 "facts": facts,
                 "markdown": True,

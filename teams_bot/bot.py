@@ -26,19 +26,19 @@ Commands (type in chat):
   profile resume — instructions for uploading a new master resume (attach a .docx directly to this chat)
   profile guide  — edit your profile & voice guide
   notifications  — view and toggle email notification preferences
-  confirm      — link your Teams identity to a Job Apply account
+  confirm      — link your Teams identity to a Landed account
   whoami       — show which account you're linked as
   unlink       — remove your Teams identity's link
   help         — command reference
 
 Auth model: the bot has no notion of "logged in" beyond a per-Teams-identity
-link to a Job Apply account (see scripts/teams_links.py). The first time a
+link to a Landed account (see scripts/teams_links.py). The first time a
 linked-or-not-yet-linked user runs any command other than help/confirm/unlink,
 _resolve_user() checks the link, and if missing/expired, looks up the caller's
 email via the Teams roster API and offers to link it. Links expire after
 LINK_DAYS (scripts/teams_links.py) and must be re-confirmed.
 
-If no Job Apply account matches the Teams email, _offer_manual_link() sends a
+If no Landed account matches the Teams email, _offer_manual_link() sends a
 sign-in card (see scripts/teams_link_tokens.py + frontend/teams-link.html)
 so the user can link an existing account under a different email instead —
 password or Google, whichever they used to originally register.
@@ -310,7 +310,7 @@ def _local_to_utc_iso(date_str: str, time_str: str, tz: str) -> str:
 
 
 class JobApplyBot(ActivityHandler):
-    """Microsoft Teams bot for the Job Apply agent platform."""
+    """Microsoft Teams bot for the Landed agent platform."""
 
     async def on_members_added_activity(
         self, members_added: list[ChannelAccount], turn_context: TurnContext,
@@ -318,7 +318,7 @@ class JobApplyBot(ActivityHandler):
         for member in members_added:
             if member.id != turn_context.activity.recipient.id:
                 welcome = (
-                    "**Welcome to Job Apply!** \U0001f4bc\n\n"
+                    "**Welcome to Landed!** \U0001f4bc\n\n"
                     "I help you generate tailored resumes, cover letters, and "
                     "interview prep materials.\n\n"
                     "Type **help** to see available commands."
@@ -567,20 +567,20 @@ class JobApplyBot(ActivityHandler):
             return None
 
         await turn_context.send_activity(MessageFactory.text(
-            f"I found a Job Apply account for **{email}**. "
+            f"I found a Landed account for **{email}**. "
             f"Reply **confirm** to let me act on your behalf."
         ))
         return None
 
     async def _offer_manual_link(self, turn_context: TurnContext, aad_object_id: str, email: str):
         """Teams email has no matching account — offer a sign-in link so the
-        user can associate an existing Job Apply account under a different
+        user can associate an existing Landed account under a different
         email (password or Google), instead of dead-ending here."""
         try:
             token = await asyncio.to_thread(api_client.teams_link_token, aad_object_id, email)
         except Exception as exc:
             await turn_context.send_activity(MessageFactory.text(
-                f"❌ I don't have a Job Apply account for {email}, "
+                f"❌ I don't have a Landed account for {email}, "
                 f"and couldn't generate a sign-in link ({exc})."
             ))
             return
@@ -588,7 +588,7 @@ class JobApplyBot(ActivityHandler):
         link_url = f"{api_client.Config.API_BASE}/teams-link.html?token={token}"
         card = HeroCard(
             text=(
-                f"I don't have a Job Apply account for {email}. If you already have an "
+                f"I don't have a Landed account for {email}. If you already have an "
                 "account under a different email, sign in below to link it "
                 "(this link expires in 15 minutes)."
             ),
@@ -682,7 +682,7 @@ class JobApplyBot(ActivityHandler):
                     "type": "TextBlock", "text": f"\U0001f464 {display_name}",
                     "size": "Large", "weight": "Bolder", "wrap": True,
                 },
-                {"type": "TextBlock", "text": "Linked Job Apply account", "isSubtle": True, "spacing": "None"},
+                {"type": "TextBlock", "text": "Linked Landed account", "isSubtle": True, "spacing": "None"},
                 {"type": "FactSet", "facts": facts, "spacing": "Medium"},
             ],
         }
@@ -1621,7 +1621,7 @@ class JobApplyBot(ActivityHandler):
 
     async def _cmd_help(self, ctx: TurnContext):
         text = (
-            "**Job Apply — Teams Bot Commands**\n\n"
+            "**Landed — Teams Bot Commands**\n\n"
             "**\U0001f916 Agent Commands** _(pick from your tracked applications — "
             "add one with **track add** first if you don't have any yet)_\n"
             "- **apply** — Generate resume + ATS resume + cover letter\n"
@@ -1652,7 +1652,7 @@ class JobApplyBot(ActivityHandler):
             "- **profile guide** — Edit your profile & voice guide\n"
             "- **notifications** — View and toggle email notification preferences\n\n"
             "**\U0001f511 Account**\n"
-            "- **confirm** — Link your Teams identity to a Job Apply account "
+            "- **confirm** — Link your Teams identity to a Landed account "
             "(offers a sign-in link if none matches your Teams email)\n"
             "- **whoami** — Show which account you're linked as\n"
             "- **unlink** — Remove your link\n\n"

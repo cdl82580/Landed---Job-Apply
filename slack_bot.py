@@ -179,7 +179,7 @@ def _fields_blocks(title: str, pairs: list[tuple[str, str]]) -> list[dict]:
 app = App(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 
 # ---------------------------------------------------------------------------
-# Access control — this bot operates a single Job Apply account (Corey's) via
+# Access control — this bot operates a single Landed account (Corey's) via
 # a shared BOT_API_KEY with no further per-user check downstream. Without
 # this gate, any Slack workspace member/guest who can DM or slash-command the
 # bot would have full control of that account: delete tracked applications,
@@ -3257,7 +3257,7 @@ def help_command(ack, respond):
     blocks = [
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": "📖  Job Apply — Command Reference"},
+            "text": {"type": "plain_text", "text": "📖  Landed — Command Reference"},
         },
 
         # Agent runs
@@ -3327,10 +3327,10 @@ def help_command(ack, respond):
         {
             "type": "context",
             "elements": [{"type": "mrkdwn",
-                          "text": f"Job Apply Agent · <{API_BASE}|Open App> · Model: `{model_label}`"}],
+                          "text": f"Landed Agent · <{API_BASE}|Open App> · Model: `{model_label}`"}],
         },
     ]
-    respond(blocks=blocks, text="Job Apply — Command Reference")
+    respond(blocks=blocks, text="Landed — Command Reference")
 
 
 # ---------------------------------------------------------------------------
@@ -3380,7 +3380,7 @@ def handle_app_home_opened(client, event, logger):
         # Header
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": "🧑‍💼  Job Apply Agent"},
+            "text": {"type": "plain_text", "text": "🧑‍💼  Landed Agent"},
         },
         {
             "type": "section",

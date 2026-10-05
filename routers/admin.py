@@ -877,7 +877,7 @@ async def test_webhook(webhook_id: str, request: Request):
         "actor":      admin["email"],
         "timestamp":  _now(),
         "ip":         _client_ip(request),
-        "details":    {"message": "This is a test delivery from Job Apply admin."},
+        "details":    {"message": "This is a test delivery from Landed admin."},
         "user_id":    admin["user_id"],
         "user_email": admin["email"],
     }

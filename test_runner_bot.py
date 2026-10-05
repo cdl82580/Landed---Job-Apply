@@ -1,7 +1,7 @@
 """
 test_runner_bot.py — Standalone Slack bot for running automated test suites.
 
-A separate app from the main Job Apply bot (which is at the 25-command limit).
+A separate app from the main Landed bot (which is at the 25-command limit).
 Only exposes two commands:
   /run-tests [unit | api | slack | all | ui-anon | ui | ui-admin]
   /test-status

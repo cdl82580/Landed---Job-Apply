@@ -9,8 +9,8 @@ run standalone via `python app.py`), so we add it to sys.path once at import
 time rather than rewriting it as a package.
 
   POST /api/messages             — Bot Framework webhook (Azure Bot -> here)
-  POST /api/teams/link-status    — has this Teams identity been linked to a Job Apply account?
-  POST /api/teams/account-lookup — does a Job Apply account exist for this email?
+  POST /api/teams/link-status    — has this Teams identity been linked to a Landed account?
+  POST /api/teams/account-lookup — does a Landed account exist for this email?
   POST /api/teams/link-confirm   — link a Teams identity to the account for this email
   POST /api/teams/link-token     — issue a short-lived token for the web login-linking flow
   POST /api/teams/unlink         — remove a Teams identity's link
@@ -100,7 +100,7 @@ async def teams_link_confirm(body: _LinkConfirmBody, request: Request):
     _require_bot(request)
     user = storage.get_user_by_email(body.email)
     if not user:
-        raise HTTPException(404, "No Job Apply account for that email")
+        raise HTTPException(404, "No Landed account for that email")
     teams_links.save_link(body.aad_object_id, user["user_id"], user["email"])
     return {"linked": True, "email": user["email"]}
 
@@ -109,7 +109,7 @@ async def teams_link_confirm(body: _LinkConfirmBody, request: Request):
 async def teams_link_token(body: _LinkTokenBody, request: Request):
     """Issue a short-lived token the bot can hand the user as a link into
     /teams-link.html, for when their Teams email has no matching account —
-    they may still have an existing Job Apply account under a different
+    they may still have an existing Landed account under a different
     email, so this lets them sign in (password or Google) to claim it."""
     _require_bot(request)
     token = teams_link_tokens.create_token(body.aad_object_id, body.teams_email)

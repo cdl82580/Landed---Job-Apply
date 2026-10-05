@@ -1,11 +1,11 @@
 """
-scripts/teams_links.py — Maps a Teams (Azure AD) identity to a Job Apply account.
+scripts/teams_links.py — Maps a Teams (Azure AD) identity to a Landed account.
 
 Key layout:
   teams_links/{aad_object_id}.json   — {user_id, email, confirmed_at, expires_at}
 
 A link is created only after the Teams user explicitly replies "confirm" to a
-prompt naming the Job Apply account we found for their email (see
+prompt naming the Landed account we found for their email (see
 routers/teams.py and teams_bot/bot.py). Links expire after LINK_DAYS and must
 be re-confirmed.
 """

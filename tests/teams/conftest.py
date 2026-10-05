@@ -76,7 +76,7 @@ def make_activity(
         attachments=attachments or [],
         entities=entities or [],
         from_property=ChannelAccount(id=from_id, aad_object_id=aad_object_id, name="Test User"),
-        recipient=ChannelAccount(id="bot-1", name="Job Apply Bot"),
+        recipient=ChannelAccount(id="bot-1", name="Landed Bot"),
         conversation=ConversationAccount(id="conv-1"),
         channel_id="msteams",
         service_url="https://smba.trafficmanager.net/amer/",
@@ -94,7 +94,7 @@ def make_ctx(**kwargs) -> MagicMock:
     return ctx
 
 
-def make_entity_mention(text: str = "<at>Job Apply</at>"):
+def make_entity_mention(text: str = "<at>Landed</at>"):
     from botbuilder.schema import Entity
     e = Entity(type="mention")
     e.additional_properties = {"text": text}

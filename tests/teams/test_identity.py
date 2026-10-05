@@ -220,7 +220,7 @@ class TestOnMembersAdded:
         from botbuilder.schema import ChannelAccount
         new_member = ChannelAccount(id="user-2")
         await bot.on_members_added_activity([new_member], ctx)
-        assert "Welcome to Job Apply" in sent_texts(ctx)[0]
+        assert "Welcome to Landed" in sent_texts(ctx)[0]
 
     async def test_does_not_welcome_the_bot_itself(self, bot):
         ctx = make_ctx()
@@ -304,7 +304,7 @@ class TestOnMessageActivityDispatch:
         mock_whoami.assert_awaited_once()
 
     async def test_mention_entity_stripped_before_matching(self, bot):
-        ctx = make_ctx(text="<at>job apply</at> whoami", entities=[make_entity_mention("<at>Job Apply</at>")])
+        ctx = make_ctx(text="<at>landed</at> whoami", entities=[make_entity_mention("<at>Landed</at>")])
         user = {"email": "a@b.com"}
         with patch.object(type(bot), "_resolve_user", new=AsyncMock(return_value=user)), \
              patch.object(type(bot), "_cmd_whoami", new=AsyncMock()) as mock_whoami:

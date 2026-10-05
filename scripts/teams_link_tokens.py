@@ -1,8 +1,8 @@
 """
 scripts/teams_link_tokens.py — Short-lived HMAC-signed tokens for linking a
-Teams identity to an existing Job Apply account via the web login flow.
+Teams identity to an existing Landed account via the web login flow.
 
-Used when a Teams user's own email has no matching Job Apply account: the bot
+Used when a Teams user's own email has no matching Landed account: the bot
 issues a token naming their aad_object_id (see routers/teams.py:
 POST /api/teams/link-token), and https://apply.cdlav.us/teams-link.html lets
 them sign in — password or Google — to claim it for whichever account they

@@ -219,7 +219,7 @@ def _bot_user(request: Request) -> dict | None:
     """Return a synthetic user dict if the request carries a valid bot API key.
 
     Bots that have resolved a specific caller (e.g. the Teams bot, after a
-    user links their Azure AD identity to a Job Apply account — see
+    user links their Azure AD identity to a Landed account — see
     routers/teams.py) pass X-Teams-User-Email to act on that user's behalf.
     Bots with no such notion of a caller (e.g. the Slack bot) fall back to
     the single primary account.
@@ -2196,7 +2196,7 @@ async def teams_link_claim(body: TeamsLinkClaimRequest, request: Request):
     Called from frontend/teams-link.html after the caller signs in (password
     or Google) in their own browser session — links whichever account they
     just authenticated as to the Teams identity named in the token. This is
-    the path for linking a Teams identity to an existing Job Apply account
+    the path for linking a Teams identity to an existing Landed account
     that uses a different email than Teams reports for that user.
     """
     user = _require_user(request)

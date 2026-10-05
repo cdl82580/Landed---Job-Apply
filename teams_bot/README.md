@@ -1,6 +1,6 @@
-# Job Apply — Microsoft Teams Bot
+# Landed — Microsoft Teams Bot
 
-A Microsoft Bot Framework integration that brings the Job Apply agent platform
+A Microsoft Bot Framework integration that brings the Landed agent platform
 to Microsoft Teams. Built with the Bot Framework SDK for Python (`botbuilder`).
 
 ## Features
@@ -26,14 +26,14 @@ to Microsoft Teams. Built with the Bot Framework SDK for Python (`botbuilder`).
 | `profile resume` | Instructions for uploading a new master resume (attach a `.docx` directly to the chat) |
 | `profile guide` | Edit your profile & voice guide |
 | `notifications` | View and toggle email notification preferences |
-| `confirm` | Link your Teams identity to a Job Apply account |
+| `confirm` | Link your Teams identity to a Landed account |
 | `whoami` | Show which account you're linked as |
 | `unlink` | Remove your Teams identity's link |
 | `runs` | List recent agent runs (structured records with type, status, Drive links) |
 | `help` | Command reference |
 
 Every command above except `help`/`confirm`/`unlink` requires the caller's Teams
-identity to already be linked to a Job Apply account — see **Identity Linking**
+identity to already be linked to a Landed account — see **Identity Linking**
 below — and `apply`/`prep`/`aq`/`thankyou` only run against a tracked application
 (no free-text company/role entry). Full per-command details live in the main
 [README.md](../README.md#teams-commands) `Teams Commands` section; this file
@@ -79,7 +79,7 @@ production.
   jobs (apply, prep, aq, thankyou, optimize) — same thread-and-poll pattern as
   the Slack bot
 - **Per-user identity linking** — unlike the Slack bot (which always acts as
-  the single primary account), the Teams bot resolves which Job Apply account
+  the single primary account), the Teams bot resolves which Landed account
   each Teams user is acting on behalf of; see **Identity Linking** below
 - File upload via direct chat attachment (`profile resume`) instead of a
   slash-command argument
@@ -196,7 +196,7 @@ The bot has no built-in notion of "logged in." The first time a Teams user
 runs any command other than `help`/`confirm`/`unlink`, the bot looks up a
 `teams_links/{aad_object_id}.json` record in Tigris (`scripts/teams_links.py`).
 If missing or expired, it fetches the caller's email via the Bot Framework's
-`TeamsInfo.get_member()` roster API, checks whether a Job Apply account exists
+`TeamsInfo.get_member()` roster API, checks whether a Landed account exists
 for that email, and — if so — asks the user to reply `confirm`. Only after
 that explicit confirmation does it persist the link (30-day expiry, then
 re-confirmation is required). Every subsequent API call the bot makes on that
