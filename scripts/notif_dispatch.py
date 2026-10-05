@@ -23,7 +23,7 @@ from . import storage, user_audit
 
 logger = logging.getLogger(__name__)
 
-_FROM_ADDRESS     = os.environ.get("RESEND_FROM", "Job Apply <onboarding@resend.dev>")
+_FROM_ADDRESS     = os.environ.get("RESEND_FROM", "Landed <onboarding@resend.dev>")
 _APP_URL          = os.environ.get("APP_URL", "https://apply.cdlav.us")
 _LOGO_URL         = f"{_APP_URL}/img/logo.png"
 _LOGODEV_PUB_KEY  = os.environ.get("LOGODEV_PUBLIC_KEY") or os.environ.get("LOGODEV_API_KEY", "")
@@ -58,13 +58,13 @@ def email_html(body_html: str) -> str:
             <table role="presentation" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td style="vertical-align:middle;padding-right:.625rem">
-                  <img src="{_LOGO_URL}" alt="Job Apply" height="32"
+                  <img src="{_LOGO_URL}" alt="Landed" height="32"
                        style="display:block;border:0">
                 </td>
                 <td style="vertical-align:middle">
                   <span style="font-family:system-ui,-apple-system,sans-serif;
                                font-size:1.125rem;font-weight:600;color:#FFFFFF;
-                               line-height:32px">Job Apply</span>
+                               line-height:32px">Landed</span>
                 </td>
               </tr>
             </table>
@@ -82,7 +82,7 @@ def email_html(body_html: str) -> str:
                      border-top:1px solid #E5E7EB">
             <p style="margin:0;font-size:.75rem;color:#6B7280">
               You're receiving this because you have an account at
-              <a href="{_APP_URL}" style="color:#1A3C5E;text-decoration:none">Job Apply</a>.
+              <a href="{_APP_URL}" style="color:#1A3C5E;text-decoration:none">Landed</a>.
             </p>
           </td>
         </tr>

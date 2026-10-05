@@ -434,7 +434,7 @@ def _verify_password(password: str, stored: str) -> bool:
 # Email helper (Resend)
 # ---------------------------------------------------------------------------
 
-_FROM_ADDRESS    = os.environ.get("RESEND_FROM", "Job Apply <hello@cdlav.us>")
+_FROM_ADDRESS    = os.environ.get("RESEND_FROM", "Landed <hello@cdlav.us>")
 _APP_URL         = os.environ.get("APP_URL", "https://apply.cdlav.us")
 _LOGO_URL        = f"{_APP_URL}/img/logo.png"
 _LOGODEV_PUB_KEY = os.environ.get("LOGODEV_PUBLIC_KEY") or os.environ.get("LOGODEV_API_KEY", "")
@@ -469,13 +469,13 @@ def _email_html(body_html: str) -> str:
             <table role="presentation" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td style="vertical-align:middle;padding-right:.625rem">
-                  <img src="{_LOGO_URL}" alt="Job Apply" height="32"
+                  <img src="{_LOGO_URL}" alt="Landed" height="32"
                        style="display:block;border:0">
                 </td>
                 <td style="vertical-align:middle">
                   <span style="font-family:system-ui,-apple-system,sans-serif;
                                font-size:1.125rem;font-weight:600;color:#FFFFFF;
-                               line-height:32px">Job Apply</span>
+                               line-height:32px">Landed</span>
                 </td>
               </tr>
             </table>
@@ -493,7 +493,7 @@ def _email_html(body_html: str) -> str:
                      border-top:1px solid #E5E7EB">
             <p style="margin:0;font-size:.75rem;color:#6B7280">
               You're receiving this because you have an account at
-              <a href="{_APP_URL}" style="color:#1A3C5E;text-decoration:none">Job Apply</a>.
+              <a href="{_APP_URL}" style="color:#1A3C5E;text-decoration:none">Landed</a>.
             </p>
           </td>
         </tr>
@@ -557,7 +557,7 @@ def _send_verification_email(to: str, display_name: str, token: str) -> bool:
     <p style="margin:1.5rem 0 0;font-size:.8rem;color:#6B7280">
       This link expires in 72 hours. If you didn't create an account, you can ignore this email.
     </p>"""
-    return _send_email(to, "Verify your email — Job Apply", text, html=_email_html(body_html))
+    return _send_email(to, "Verify your email — Landed", text, html=_email_html(body_html))
 
 # ---------------------------------------------------------------------------
 # App + auth middleware
@@ -1203,7 +1203,7 @@ def _daily_digest_email(user_email: str, user_id: str, apps: list[dict]) -> None
             if ref and _days_since(ref) >= _FOLLOW_UP_TIER1_DAYS:
                 follow_ups_due.append(a)
 
-    subject = f"Job Apply daily — {len(active)} active, {len(follow_ups_due)} follow-up{'s' if len(follow_ups_due) != 1 else ''} due"
+    subject = f"Landed daily — {len(active)} active, {len(follow_ups_due)} follow-up{'s' if len(follow_ups_due) != 1 else ''} due"
 
     def _app_row(a: dict) -> str:
         return (
@@ -1298,7 +1298,7 @@ def _weekly_digest_email(user_email: str, user_id: str, apps: list[dict]) -> Non
         if ref and _days_since(ref) >= 14:
             silent.append(a)
 
-    subject = f"Job Apply weekly — {len(active)} active, {len(silent)} gone quiet"
+    subject = f"Landed weekly — {len(active)} active, {len(silent)} gone quiet"
 
     def _status_row(status: str, count: int) -> str:
         return (
@@ -2101,7 +2101,7 @@ async def forgot_password(request: Request):
 
             text = (
                 f"Hi {user.get('display_name', 'there')},\n\n"
-                f"Click the link below to reset your Job Apply password. "
+                f"Click the link below to reset your Landed password. "
                 f"This link expires in 1 hour.\n\n{reset_url}\n\n"
                 f"If you didn't request this, ignore this email."
             )
@@ -2121,7 +2121,7 @@ async def forgot_password(request: Request):
               If you didn't request this, you can safely ignore this email.
             </p>"""
 
-            sent = _send_email(email, "Reset your Job Apply password", text, html=_email_html(body_html))
+            sent = _send_email(email, "Reset your Landed password", text, html=_email_html(body_html))
             logger.info("forgot_password: reset email sent=%s to=%r user_id=%s", sent, email, user["user_id"])
             user_audit.log(user["user_id"], "password_reset_requested", email, _client_ip(request))
         except Exception:
@@ -2466,14 +2466,14 @@ async def change_password(req: PasswordChangeRequest, request: Request):
     user_audit.log(user_data["user_id"], "password_changed", user_data["email"], _client_ip(request))
 
     _pw_text = (
-        f"Your Job Apply password was just changed.\n\n"
+        f"Your Landed password was just changed.\n\n"
         f"If this was you, no action is needed.\n"
         f"If you didn't do this, reset your password at {_APP_URL}/"
     )
     _pw_html = _email_html(f"""
     <h2 style="color:#1A3C5E;margin:0 0 .75rem;font-size:1.25rem">Password changed</h2>
     <p style="margin:0 0 1rem;color:#374151">
-      Your Job Apply password was just changed.
+      Your Landed password was just changed.
     </p>
     <p style="margin:0 0 1.5rem;color:#374151">
       If this was you, no action is needed. If you didn't make this change,
@@ -2482,11 +2482,11 @@ async def change_password(req: PasswordChangeRequest, request: Request):
     <a href="{_APP_URL}/"
        style="display:inline-block;background:#1A3C5E;color:#FFFFFF;text-decoration:none;
               padding:.75rem 1.5rem;border-radius:6px;font-weight:600;font-size:.95rem">
-      Go to Job Apply &rarr;
+      Go to Landed &rarr;
     </a>""")
     emailed = _send_email(
         to=user_data["email"],
-        subject="Job Apply — Password Changed",
+        subject="Landed — Password Changed",
         body=_pw_text,
         html=_pw_html,
     )

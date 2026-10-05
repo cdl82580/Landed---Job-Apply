@@ -196,7 +196,7 @@ async def confirm_applied_page(token: str = Query(...)):
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Confirm Applied Date — Job Apply</title>
+  <title>Confirm Applied Date — Landed</title>
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{ font-family: system-ui, -apple-system, sans-serif; background: #F9FAFB;
@@ -311,7 +311,7 @@ def _ok_page(message: str, company: str, role: str) -> HTMLResponse:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Done — Job Apply</title>
+  <title>Done — Landed</title>
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{ font-family: system-ui, -apple-system, sans-serif; background: #F9FAFB;
@@ -350,7 +350,7 @@ def _confirm_page(description: str, token: str, company: str, role: str) -> HTML
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Confirm — Job Apply</title>
+  <title>Confirm — Landed</title>
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{ font-family: system-ui, -apple-system, sans-serif; background: #F9FAFB;
@@ -389,7 +389,7 @@ def _confirm_page(description: str, token: str, company: str, role: str) -> HTML
 def _error_page(message: str) -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Error — Job Apply</title>
+<head><meta charset="UTF-8"><title>Error — Landed</title>
 <style>body{{font-family:system-ui,sans-serif;display:flex;align-items:center;
 justify-content:center;min-height:100vh;background:#F9FAFB}}
 .card{{background:#fff;border:1px solid #E5E7EB;border-radius:10px;
