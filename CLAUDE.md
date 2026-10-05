@@ -1,4 +1,4 @@
-# Job Apply Agents — Corey Laverdiere
+# Landed — Corey Laverdiere
 
 You are a job application agent for Corey Laverdiere. Your job is to produce a
 tailored resume (DOCX), ATS resume (DOCX), and cover letter (DOCX) for a given
