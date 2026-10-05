@@ -170,11 +170,11 @@ Only do this once step 4's Web Chat test works.
 2. Add a 32×32 `outline.png` and a 192×192 `color.png` to `manifest/` (transparent background, simple icon — Teams will reject the upload without both files present)
 3. Zip **the contents** of the manifest folder (not the folder itself):
    ```bash
-   cd manifest && zip ../jobapply-teams.zip manifest.json outline.png color.png && cd ..
+   cd manifest && zip ../landed-teams-app.zip manifest.json outline.png color.png && cd ..
    ```
 4. In Teams: **Apps** (left rail) → **Manage your apps** → **Upload an app** → **Upload a custom app**
    - If you don't see "Upload a custom app", your Teams admin has custom app uploads disabled org-wide — ask them to enable it in the Teams Admin Center under **Teams apps → Setup policies**, or have them upload/approve it centrally instead
-5. Select `jobapply-teams.zip` — Teams installs it and opens a chat with the bot
+5. Select `landed-teams-app.zip` — Teams installs it and opens a chat with the bot
 6. Send `help` to confirm
 
 ### Common failure points
