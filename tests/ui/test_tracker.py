@@ -112,3 +112,100 @@ class TestSearchAndFilter:
         # Empty state should no longer be forced by search
         # (may still be empty if user has no applications)
         expect(auth_page.locator("#searchInput")).to_have_value("")
+
+
+class TestTagFilter:
+    """Tag include/exclude filter. The applications list is mocked so the test
+    is deterministic and never touches the test account's real data."""
+
+    APPS = [
+        {"id": "a1", "company": "Acme",  "role_title": "SE",  "status": "Applied", "last_updated": "2026-01-04T00:00:00Z",
+         "tags": ["DUA Reported", "Referral"]},
+        {"id": "a2", "company": "Beta",  "role_title": "TAM", "status": "Applied", "last_updated": "2026-01-03T00:00:00Z",
+         "tags": ["Referral"]},
+        {"id": "a3", "company": "Gamma", "role_title": "FDE", "status": "Applied", "last_updated": "2026-01-02T00:00:00Z",
+         "tags": []},
+        {"id": "a4", "company": "Delta", "role_title": "CSM", "status": "Applied", "last_updated": "2026-01-01T00:00:00Z",
+         "tags": ["DUA Reported"]},
+    ]
+
+    @pytest.fixture()
+    def tracker(self, auth_page):
+        auth_page.route(
+            "**/api/applications",
+            lambda route: route.fulfill(json={"items": self.APPS, "total": len(self.APPS)})
+            if route.request.method == "GET" else route.continue_(),
+        )
+        auth_page.goto("/tracking.html")
+        auth_page.wait_for_selector("#appTableBody tr", timeout=10_000)
+        return auth_page
+
+    @staticmethod
+    def _companies(page):
+        page.wait_for_timeout(200)
+        return page.locator("#appTableBody tr .co-name").all_inner_texts()
+
+    @staticmethod
+    def _open_menu(page):
+        page.click("#tagFilterBtn")
+        expect(page.locator("#tagFilterMenu")).to_be_visible()
+
+    def test_menu_lists_tags_in_use(self, tracker):
+        self._open_menu(tracker)
+        rows = tracker.locator("#tagFilterList .tag-filter-row")
+        expect(rows).to_have_count(2)
+        expect(rows.nth(0)).to_contain_text("DUA Reported")
+        expect(rows.nth(1)).to_contain_text("Referral")
+
+    def test_search_narrows_tag_list(self, tracker):
+        self._open_menu(tracker)
+        tracker.fill("#tagFilterSearch", "ref")
+        rows = tracker.locator("#tagFilterList .tag-filter-row")
+        expect(rows).to_have_count(1)
+        expect(rows.first).to_contain_text("Referral")
+
+    def test_include_shows_only_tagged(self, tracker):
+        self._open_menu(tracker)
+        tracker.check("#tagFilterList input[value='DUA Reported']")
+        assert sorted(self._companies(tracker)) == ["Acme", "Delta"]
+        expect(tracker.locator("#tagFilterBtn")).to_have_text("Tags: DUA Reported")
+
+    def test_multiple_included_tags_match_any(self, tracker):
+        self._open_menu(tracker)
+        tracker.check("#tagFilterList input[value='DUA Reported']")
+        tracker.check("#tagFilterList input[value='Referral']")
+        assert sorted(self._companies(tracker)) == ["Acme", "Beta", "Delta"]
+
+    def test_exclude_hides_tagged_and_keeps_untagged(self, tracker):
+        self._open_menu(tracker)
+        tracker.click("#tagFilterList .tag-ex-btn[data-tag='DUA Reported']")
+        assert sorted(self._companies(tracker)) == ["Beta", "Gamma"]
+        expect(tracker.locator("#tagFilterBtn")).to_have_text("Tags: not DUA Reported")
+        # menu stays open so more tags can be toggled
+        expect(tracker.locator("#tagFilterMenu")).to_be_visible()
+
+    def test_include_and_exclude_combine(self, tracker):
+        self._open_menu(tracker)
+        tracker.check("#tagFilterList input[value='Referral']")
+        tracker.click("#tagFilterList .tag-ex-btn[data-tag='DUA Reported']")
+        assert self._companies(tracker) == ["Beta"]
+        expect(tracker.locator("#tagFilterBtn")).to_have_text("Tags: Referral, not DUA Reported")
+
+    def test_including_an_excluded_tag_removes_the_exclusion(self, tracker):
+        self._open_menu(tracker)
+        tracker.click("#tagFilterList .tag-ex-btn[data-tag='DUA Reported']")
+        tracker.check("#tagFilterList input[value='DUA Reported']")
+        assert sorted(self._companies(tracker)) == ["Acme", "Delta"]
+        expect(tracker.locator(".tag-ex-btn[data-tag='DUA Reported']")).not_to_have_class("on")
+
+    def test_clear_resets_tag_filter(self, tracker):
+        self._open_menu(tracker)
+        tracker.click("#tagFilterList .tag-ex-btn[data-tag='DUA Reported']")
+        tracker.click("#clearFiltersBtn")
+        assert sorted(self._companies(tracker)) == ["Acme", "Beta", "Delta", "Gamma"]
+        expect(tracker.locator("#tagFilterBtn")).to_have_text("Tags: All")
+
+    def test_escape_closes_menu(self, tracker):
+        self._open_menu(tracker)
+        tracker.keyboard.press("Escape")
+        expect(tracker.locator("#tagFilterMenu")).to_be_hidden()
