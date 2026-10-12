@@ -334,6 +334,17 @@
       font-size: .8rem; color: var(--text); cursor: pointer; border-radius: 6px;
     }
     .tag-filter-list label:hover { background: rgba(99,102,241,.08); }
+    .tag-filter-row { display: flex; align-items: center; }
+    .tag-filter-row label { flex: 1; min-width: 0; }
+    .tag-filter-row.excluded label span { text-decoration: line-through; color: var(--muted); }
+    .tag-ex-btn {
+      border: 1px solid var(--input-border); background: transparent; color: var(--muted);
+      border-radius: 6px; font-size: .7rem; font-weight: 600; padding: .15rem .4rem;
+      cursor: pointer; white-space: nowrap;
+    }
+    .tag-ex-btn:hover { color: var(--text); }
+    .tag-ex-btn.on { background: #FEE2E2; color: #B91C1C; border-color: #FCA5A5; }
+    [data-theme="dark"] .tag-ex-btn.on { background: #2B1010; color: #F87171; border-color: #7F1D1D; }
     .tag-filter-empty { padding: .4rem .25rem; font-size: .775rem; color: var(--muted); }
 
     .tag-input {
@@ -1362,7 +1373,7 @@ document.addEventListener('click', (e) => {
   function updateFilterBadge() {
     const statusActive = document.querySelector('#statusPills .pill.active')?.dataset.status !== '' ? 1 : 0;
     const matchActive  = document.querySelector('#matchPills .pill.active')?.dataset.match  !== '' ? 1 : 0;
-    const tagActive    = _activeTags.size ? 1 : 0;
+    const tagActive    = (_activeTags.size || _excludedTags.size) ? 1 : 0;
     const searchActive = document.getElementById('searchInput')?.value.trim() ? 1 : 0;
     const count = statusActive + matchActive + tagActive + searchActive;
     if (badge) {
@@ -1462,10 +1473,11 @@ const DEFAULT_STATUSES = new Set(['Applied', 'Phone Screen', 'Interviewing', 'Re
 let _activeStatus = new Set(DEFAULT_STATUSES);
 let _activeMatch  = new Set();
 let _activeTags   = new Set();
+let _excludedTags = new Set();
 let _searchQ      = '';
 
 function _isDefaultState() {
-  if (_activeMatch.size || _activeTags.size || _searchQ) return false;
+  if (_activeMatch.size || _activeTags.size || _excludedTags.size || _searchQ) return false;
   if (_activeStatus.size !== DEFAULT_STATUSES.size) return false;
   for (const s of DEFAULT_STATUSES) if (!_activeStatus.has(s)) return false;
   return true;
@@ -1491,6 +1503,9 @@ function applyFilters() {
   }
   if (_activeTags.size) {
     list = list.filter(a => (a.tags || []).some(t => _activeTags.has(t)));
+  }
+  if (_excludedTags.size) {
+    list = list.filter(a => !(a.tags || []).some(t => _excludedTags.has(t)));
   }
   if (_searchQ) {
     const q = _searchQ.toLowerCase();
@@ -1763,11 +1778,15 @@ function _renderTagFilter() {
   const tags = all.filter(t => t.toLowerCase().includes(q));
   const list = document.getElementById('tagFilterList');
   list.innerHTML = tags.length
-    ? tags.map(t => `<label><input type="checkbox" value="${esc(t)}"${_activeTags.has(t) ? ' checked' : ''}> ${esc(t)}</label>`).join('')
+    ? tags.map(t => `<div class="tag-filter-row${_excludedTags.has(t) ? ' excluded' : ''}">
+        <label><input type="checkbox" value="${esc(t)}"${_activeTags.has(t) ? ' checked' : ''}> <span>${esc(t)}</span></label>
+        <button type="button" class="tag-ex-btn${_excludedTags.has(t) ? ' on' : ''}" data-tag="${esc(t)}" title="Hide applications with this tag" aria-pressed="${_excludedTags.has(t)}">Not</button>
+      </div>`).join('')
     : `<div class="tag-filter-empty">${all.length ? 'No matching tags' : 'No tags yet'}</div>`;
   const btn = document.getElementById('tagFilterBtn');
-  btn.textContent = _activeTags.size ? `Tags: ${[..._activeTags].join(', ')}` : 'Tags: All';
-  btn.classList.toggle('active', _activeTags.size > 0);
+  const parts = [...[..._activeTags], ...[..._excludedTags].map(t => `not ${t}`)];
+  btn.textContent = parts.length ? `Tags: ${parts.join(', ')}` : 'Tags: All';
+  btn.classList.toggle('active', parts.length > 0);
 }
 
 function _setTagMenu(open) {
@@ -1787,11 +1806,20 @@ document.getElementById('tagFilterSearch').addEventListener('input', _renderTagF
 document.getElementById('tagFilterList').addEventListener('change', (e) => {
   const cb = e.target.closest('input[type="checkbox"]');
   if (!cb) return;
-  if (cb.checked) _activeTags.add(cb.value); else _activeTags.delete(cb.value);
+  if (cb.checked) { _activeTags.add(cb.value); _excludedTags.delete(cb.value); } else _activeTags.delete(cb.value);
+  _renderTagFilter();
+  applyFilters();
+});
+document.getElementById('tagFilterList').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tag-ex-btn');
+  if (!btn) return;
+  const t = btn.dataset.tag;
+  if (_excludedTags.has(t)) _excludedTags.delete(t); else { _excludedTags.add(t); _activeTags.delete(t); }
   _renderTagFilter();
   applyFilters();
 });
 document.addEventListener('click', (e) => {
+  if (!e.target.isConnected) return;
   if (!e.target.closest('#tagFilter')) _setTagMenu(false);
 });
 document.addEventListener('keydown', (e) => {
@@ -1849,6 +1877,7 @@ document.getElementById('clearFiltersBtn').addEventListener('click', () => {
   _activeStatus = new Set(DEFAULT_STATUSES);
   _activeMatch.clear();
   _activeTags.clear();
+  _excludedTags.clear();
   _renderTagFilter();
   _searchQ = '';
   document.getElementById('searchInput').value = '';

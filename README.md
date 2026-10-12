@@ -30,7 +30,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 ### Application Tracker
 - Full CRUD for job applications — company (via Logo.dev search), role, status, recruiter, salary, custom tags
 - **Match scoring** — Claude-powered resume↔JD fit score (0–100) with category badge (Strong Match / Good Match / Stretch / Long Shot) and per-dimension breakdown; Rescore button per row
-- **Tags** — free-form per-application tags (max 20 per app, 30 chars each); type-to-search multi-select filter (matches any selected tag)
+- **Tags** — free-form per-application tags (max 20 per app, 30 chars each); type-to-search multi-select filter: tick tags to include (matches any selected tag) and press "Not" to exclude a tag; the two combine
 - **Auto `date_applied`** — setting status to "Applied" automatically sets today's date if not already present
 - **Run agent from tracker** — ▶ icon on each row opens the agent page with the app pre-selected and JD loaded from Drive
 - **Setup Drive folder** — ⊕ icon on rows without a Drive folder creates the folder and attempts JD capture from the posting URL in the background
