@@ -734,17 +734,14 @@ def _track_add_blocks(prefill: dict | None = None) -> list:
             "element": {"type": "plain_text_input", "action_id": "value",
                         "placeholder": {"type": "plain_text", "text": "https://…"}},
         },
-        # ── DUA ──────────────────────────────────────────────────────
+        # ── Tags ─────────────────────────────────────────────────────
         {
             "type": "input",
-            "block_id": "dua",
+            "block_id": "tags",
             "optional": True,
-            "label": {"type": "plain_text", "text": "Unemployment (DUA)"},
-            "element": {
-                "type": "checkboxes", "action_id": "value",
-                "options": [{"text": {"type": "plain_text", "text": "Reported this application to DUA"},
-                             "value": "yes"}],
-            },
+            "label": {"type": "plain_text", "text": "Tags"},
+            "element": {"type": "plain_text_input", "action_id": "value",
+                        "placeholder": {"type": "plain_text", "text": "Comma-separated, e.g. DUA Reported, Referral"}},
         },
         # ── Recruiter ────────────────────────────────────────────────
         {
@@ -825,10 +822,6 @@ def track_add_view_submit(ack, body, client, view):
     def _date(block):
         return ((vals.get(block, {}).get("value", {}) or {}).get("selected_date") or None)
 
-    def _dua(block):
-        opts = ((vals.get(block, {}).get("value", {}) or {}).get("selected_options") or [])
-        return any(o.get("value") == "yes" for o in opts)
-
     role_title     = _txt("role_title")
     status         = _sel("status", "Researching")
     date_applied   = _date("date_applied")
@@ -836,7 +829,7 @@ def track_add_view_submit(ack, body, client, view):
     location       = _txt("location")
     salary_range   = _txt("salary_range")
     url            = _txt("url")
-    dua            = _dua("dua")
+    tags           = [t.strip() for t in _txt("tags").split(",") if t.strip()]
     recruiter_name = _txt("recruiter_name")
     recruiter_email= _txt("recruiter_email")
     note           = _txt("note")
@@ -855,7 +848,7 @@ def track_add_view_submit(ack, body, client, view):
             "location":        location,
             "salary_range":    salary_range,
             "url":             url,
-            "dua":             dua,
+            "tags":            tags,
             "recruiter_name":  recruiter_name,
             "recruiter_email": recruiter_email,
         })
@@ -999,15 +992,14 @@ def track_update_select_submit(ack, body, client, view):
                 "placeholder": {"type": "plain_text", "text": "https://…"},
             },
         },
-        # DUA
+        # Tags
         {
-            "type": "input", "block_id": "dua", "optional": True,
-            "label": {"type": "plain_text", "text": "Unemployment (DUA)"},
+            "type": "input", "block_id": "tags", "optional": True,
+            "label": {"type": "plain_text", "text": "Tags"},
             "element": {
-                "type": "checkboxes", "action_id": "value",
-                "options": [{"text": {"type": "plain_text", "text": "Reported to DUA"}, "value": "yes"}],
-                **( {"initial_options": [{"text": {"type": "plain_text", "text": "Reported to DUA"}, "value": "yes"}]}
-                    if a.get("dua") else {} ),
+                "type": "plain_text_input", "action_id": "value",
+                **( {"initial_value": ", ".join(a["tags"])} if a.get("tags") else {} ),
+                "placeholder": {"type": "plain_text", "text": "Comma-separated, e.g. DUA Reported, Referral"},
             },
         },
         # Recruiter Name
@@ -1070,10 +1062,6 @@ def track_update_edit_submit(ack, body, client, view):
     def _date(block):
         return ((vals.get(block, {}).get("value", {}) or {}).get("selected_date") or None)
 
-    def _dua(block):
-        opts = ((vals.get(block, {}).get("value", {}) or {}).get("selected_options") or [])
-        return any(o.get("value") == "yes" for o in opts)
-
     date_applied = _date("date_applied")
     if date_applied:
         date_applied = f"{date_applied}T00:00:00Z"
@@ -1085,12 +1073,12 @@ def track_update_edit_submit(ack, body, client, view):
         "location":        _txt("location") or None,
         "salary_range":    _txt("salary_range") or None,
         "url":             _txt("url") or None,
-        "dua":             _dua("dua"),
+        "tags":            [t.strip() for t in _txt("tags").split(",") if t.strip()],
         "recruiter_name":  _txt("recruiter_name") or None,
         "recruiter_email": _txt("recruiter_email") or None,
     }
     # Strip None values so we don't overwrite fields with null
-    updates = {k: v for k, v in updates.items() if v is not None or k in ("dua",)}
+    updates = {k: v for k, v in updates.items() if v is not None}
     note = _txt("note")
 
     try:

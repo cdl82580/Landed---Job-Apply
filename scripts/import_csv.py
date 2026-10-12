@@ -117,7 +117,7 @@ def main() -> None:
             status      = (row.get("Status") or "Researching").strip()
             date_app    = parse_date(row.get("Date Applied") or "")
             last_upd    = parse_date(row.get("Last Updated") or "")
-            dua         = (row.get("DUA?") or "").strip().upper() == "TRUE"
+            tags        = ["DUA Reported"] if (row.get("DUA?") or "").strip().upper() == "TRUE" else []
             job_source  = (row.get("Job Source") or "").strip()
             location    = (row.get("Location / Remote") or "").strip()
             salary      = (row.get("Salary Range") or "").strip()
@@ -159,7 +159,7 @@ def main() -> None:
                 "created_by":       IMPORT_ACTOR,
                 "updated_at":       updated_at,
                 "updated_by":       IMPORT_ACTOR,
-                "dua":              dua,
+                "tags":             tags,
                 "job_source":       job_source,
                 "location":         location,
                 "salary_range":     salary,

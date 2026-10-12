@@ -302,8 +302,8 @@
     [data-theme="dark"] .s-no-response   { background: #1E2A3A; color: #94A3B8; }
 
     /* ── Match score badges ───────────────────────────────────────── */
-    /* ── DUA badge ────────────────────────────────────────────── */
-    .dua-badge {
+    /* ── Tag chips ────────────────────────────────────────────── */
+    .tag-chip {
       display: inline-flex; align-items: center; gap: .2rem;
       font-size: .65rem; font-weight: 700; letter-spacing: .02em;
       padding: .15rem .45rem; border-radius: 999px;
@@ -312,7 +312,43 @@
       white-space: nowrap; vertical-align: middle;
       margin-top: .25rem;
     }
-    [data-theme="dark"] .dua-badge { background: #0C2340; color: #7DD3FC; border-color: #075985; }
+    [data-theme="dark"] .tag-chip { background: #0C2340; color: #7DD3FC; border-color: #075985; }
+    .tag-chip.more { background: transparent; color: var(--muted); border-color: var(--input-border); }
+
+    .tag-filter { position: relative; }
+    .tag-filter-menu {
+      position: absolute; top: calc(100% + .25rem); left: 0; z-index: 30;
+      min-width: 220px; max-width: 320px; padding: .5rem;
+      background: var(--surface, var(--input-bg)); border: 1px solid var(--input-border);
+      border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15);
+    }
+    .tag-filter-menu[hidden] { display: none; }
+    .tag-filter-menu input[type="text"] {
+      width: 100%; box-sizing: border-box; padding: .35rem .5rem; margin-bottom: .35rem;
+      border: 1px solid var(--input-border); border-radius: 6px;
+      background: var(--input-bg); color: var(--text); font-size: .8rem;
+    }
+    .tag-filter-list { max-height: 220px; overflow-y: auto; }
+    .tag-filter-list label {
+      display: flex; align-items: center; gap: .5rem; padding: .3rem .25rem;
+      font-size: .8rem; color: var(--text); cursor: pointer; border-radius: 6px;
+    }
+    .tag-filter-list label:hover { background: rgba(99,102,241,.08); }
+    .tag-filter-empty { padding: .4rem .25rem; font-size: .775rem; color: var(--muted); }
+
+    .tag-input {
+      display: flex; flex-wrap: wrap; gap: .3rem; align-items: center;
+      padding: .3rem .4rem; border: 1px solid var(--input-border); border-radius: 8px;
+      background: var(--input-bg);
+    }
+    .tag-input input { flex: 1; min-width: 8rem; border: 0; outline: 0; background: transparent;
+      color: var(--text); font-size: .875rem; padding: .2rem; }
+    .tag-input .tag-chip { margin-top: 0; cursor: default; }
+    .tag-input .tag-chip button {
+      border: 0; background: transparent; color: inherit; cursor: pointer;
+      font-size: .85rem; line-height: 1; padding: 0 0 0 .2rem;
+    }
+    .drawer-body.view-mode .tag-input input, .drawer-body.view-mode .tag-chip button { display: none; }
 
     .m-strong  { background: #D1FAE5; color: #065F46; }
     .m-good    { background: #DBEAFE; color: #1D4ED8; }
@@ -901,10 +937,12 @@
         <button class="pill" data-match="Long Shot">Long Shot</button>
         <button class="pill" data-match="Not scored">Not Scored</button>
       </div>
-      <div class="pill-group" id="duaPills">
-        <button class="pill active" data-dua="">DUA: All</button>
-        <button class="pill" data-dua="yes">DUA Filed</button>
-        <button class="pill" data-dua="no">Not Filed</button>
+      <div class="tag-filter" id="tagFilter">
+        <button class="pill" id="tagFilterBtn" type="button" aria-haspopup="true" aria-expanded="false">Tags: All</button>
+        <div class="tag-filter-menu" id="tagFilterMenu" hidden>
+          <input type="text" id="tagFilterSearch" placeholder="Search tags…" autocomplete="off" aria-label="Search tags">
+          <div class="tag-filter-list" id="tagFilterList"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1056,9 +1094,14 @@
       <label for="dUrl">Job Posting URL <span class="opt">(optional)</span></label>
       <input type="url" id="dUrl" data-field placeholder="https://…">
     </div>
-    <div class="check-row">
-      <input type="checkbox" id="dDua" data-field>
-      <label for="dDua">Reported to unemployment (DUA)?</label>
+    <div class="field">
+      <label for="dTagInput">Tags <span class="opt">(optional)</span></label>
+      <div class="tag-input" id="tagInputBox">
+        <span id="dTagChips"></span>
+        <input type="text" id="dTagInput" data-field list="dTagSuggestions" maxlength="30"
+               placeholder="Add a tag, press Enter" autocomplete="off">
+        <datalist id="dTagSuggestions"></datalist>
+      </div>
     </div>
 
     <!-- Recruiter -->
@@ -1319,9 +1362,9 @@ document.addEventListener('click', (e) => {
   function updateFilterBadge() {
     const statusActive = document.querySelector('#statusPills .pill.active')?.dataset.status !== '' ? 1 : 0;
     const matchActive  = document.querySelector('#matchPills .pill.active')?.dataset.match  !== '' ? 1 : 0;
-    const duaActive    = document.querySelector('#duaPills .pill.active')?.dataset.dua      !== '' ? 1 : 0;
+    const tagActive    = _activeTags.size ? 1 : 0;
     const searchActive = document.getElementById('searchInput')?.value.trim() ? 1 : 0;
-    const count = statusActive + matchActive + duaActive + searchActive;
+    const count = statusActive + matchActive + tagActive + searchActive;
     if (badge) {
       badge.textContent = count;
       badge.classList.toggle('hidden', count === 0);
@@ -1418,11 +1461,11 @@ const DEFAULT_STATUSES = new Set(['Applied', 'Phone Screen', 'Interviewing', 'Re
 
 let _activeStatus = new Set(DEFAULT_STATUSES);
 let _activeMatch  = new Set();
-let _activeDua    = new Set();
+let _activeTags   = new Set();
 let _searchQ      = '';
 
 function _isDefaultState() {
-  if (_activeMatch.size || _activeDua.size || _searchQ) return false;
+  if (_activeMatch.size || _activeTags.size || _searchQ) return false;
   if (_activeStatus.size !== DEFAULT_STATUSES.size) return false;
   for (const s of DEFAULT_STATUSES) if (!_activeStatus.has(s)) return false;
   return true;
@@ -1446,8 +1489,8 @@ function applyFilters() {
       return false;
     });
   }
-  if (_activeDua.size) {
-    list = list.filter(a => (_activeDua.has('yes') && !!a.dua) || (_activeDua.has('no') && !a.dua));
+  if (_activeTags.size) {
+    list = list.filter(a => (a.tags || []).some(t => _activeTags.has(t)));
   }
   if (_searchQ) {
     const q = _searchQ.toLowerCase();
@@ -1504,7 +1547,7 @@ function renderTable() {
         </div>
       </div></td>
       <td class="role-cell">${esc(a.role_title)}</td>
-      <td>${statusBadge(a.status)}${a.dua ? ' <span class="dua-badge" title="Reported to DUA">DUA ✓</span>' : ''}</td>
+      <td>${statusBadge(a.status)}${tagChips(a.tags)}</td>
       <td>${matchCell(a)}</td>
       <td style="color:var(--muted);font-size:.8rem">${fmtDate(_dateColVal(a))}</td>
       <td><div class="actions-cell">
@@ -1529,7 +1572,7 @@ function renderTable() {
       </div>
       <div class="app-card-meta">
         ${statusBadge(a.status)}
-        ${a.dua ? '<span class="dua-badge" title="Reported to DUA">DUA ✓</span>' : ''}
+        ${tagChips(a.tags)}
         <span style="font-size:.75rem;color:var(--muted)">${fmtDate(a.date_applied)}</span>
       </div>
       <div class="app-card-meta">
@@ -1699,12 +1742,104 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
   applyFilters();
 });
 
-document.getElementById('duaPills').addEventListener('click', (e) => {
-  const pill = e.target.closest('.pill');
-  if (!pill) return;
-  _pillToggle(_activeDua, pill.dataset.dua);
-  _syncPills('duaPills', _activeDua, 'dua');
+// ── Tags: helpers, filter dropdown, drawer chip input ─────────────────
+function tagChips(tags) {
+  tags = tags || [];
+  if (!tags.length) return '';
+  const shown = tags.slice(0, 2).map(t => ` <span class="tag-chip" title="${esc(t)}">${esc(t)}</span>`).join('');
+  const more = tags.length > 2 ? ` <span class="tag-chip more" title="${esc(tags.slice(2).join(', '))}">+${tags.length - 2}</span>` : '';
+  return shown + more;
+}
+
+function _allTags() {
+  const seen = new Map();
+  for (const a of _apps) for (const t of (a.tags || [])) if (!seen.has(t.toLowerCase())) seen.set(t.toLowerCase(), t);
+  return [...seen.values()].sort((x, y) => x.localeCompare(y));
+}
+
+function _renderTagFilter() {
+  const q = document.getElementById('tagFilterSearch').value.trim().toLowerCase();
+  const all = _allTags();
+  const tags = all.filter(t => t.toLowerCase().includes(q));
+  const list = document.getElementById('tagFilterList');
+  list.innerHTML = tags.length
+    ? tags.map(t => `<label><input type="checkbox" value="${esc(t)}"${_activeTags.has(t) ? ' checked' : ''}> ${esc(t)}</label>`).join('')
+    : `<div class="tag-filter-empty">${all.length ? 'No matching tags' : 'No tags yet'}</div>`;
+  const btn = document.getElementById('tagFilterBtn');
+  btn.textContent = _activeTags.size ? `Tags: ${[..._activeTags].join(', ')}` : 'Tags: All';
+  btn.classList.toggle('active', _activeTags.size > 0);
+}
+
+function _setTagMenu(open) {
+  document.getElementById('tagFilterMenu').hidden = !open;
+  document.getElementById('tagFilterBtn').setAttribute('aria-expanded', String(open));
+  if (open) {
+    document.getElementById('tagFilterSearch').value = '';
+    _renderTagFilter();
+    document.getElementById('tagFilterSearch').focus();
+  }
+}
+
+document.getElementById('tagFilterBtn').addEventListener('click', () => {
+  _setTagMenu(document.getElementById('tagFilterMenu').hidden);
+});
+document.getElementById('tagFilterSearch').addEventListener('input', _renderTagFilter);
+document.getElementById('tagFilterList').addEventListener('change', (e) => {
+  const cb = e.target.closest('input[type="checkbox"]');
+  if (!cb) return;
+  if (cb.checked) _activeTags.add(cb.value); else _activeTags.delete(cb.value);
+  _renderTagFilter();
   applyFilters();
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#tagFilter')) _setTagMenu(false);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') _setTagMenu(false);
+});
+
+let _drawerTags = [];
+
+function _renderDrawerTags() {
+  document.getElementById('dTagChips').innerHTML = _drawerTags.map((t, i) =>
+    `<span class="tag-chip">${esc(t)}<button type="button" data-i="${i}" aria-label="Remove tag ${esc(t)}">&times;</button></span>`
+  ).join('');
+  document.getElementById('dTagSuggestions').innerHTML =
+    _allTags().filter(t => !_drawerTags.some(d => d.toLowerCase() === t.toLowerCase()))
+              .map(t => `<option value="${esc(t)}">`).join('');
+}
+
+function _setDrawerTags(tags) {
+  _drawerTags = [...(tags || [])];
+  document.getElementById('dTagInput').value = '';
+  _renderDrawerTags();
+}
+
+function _commitTagInput() {
+  const input = document.getElementById('dTagInput');
+  const t = input.value.replace(/,/g, ' ').trim().replace(/\s+/g, ' ');
+  input.value = '';
+  if (t && !_drawerTags.some(d => d.toLowerCase() === t.toLowerCase())) {
+    _drawerTags.push(t);
+    _renderDrawerTags();
+  }
+}
+
+document.getElementById('dTagInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    _commitTagInput();
+  } else if (e.key === 'Backspace' && !e.target.value && _drawerTags.length) {
+    _drawerTags.pop();
+    _renderDrawerTags();
+  }
+});
+document.getElementById('dTagInput').addEventListener('change', _commitTagInput);
+document.getElementById('dTagChips').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-i]');
+  if (!btn) return;
+  _drawerTags.splice(Number(btn.dataset.i), 1);
+  _renderDrawerTags();
 });
 
 function _updateClearBtn() {
@@ -1713,12 +1848,12 @@ function _updateClearBtn() {
 document.getElementById('clearFiltersBtn').addEventListener('click', () => {
   _activeStatus = new Set(DEFAULT_STATUSES);
   _activeMatch.clear();
-  _activeDua.clear();
+  _activeTags.clear();
+  _renderTagFilter();
   _searchQ = '';
   document.getElementById('searchInput').value = '';
   _syncPills('statusPills', _activeStatus, 'status');
   _syncPills('matchPills',  _activeMatch,  'match');
-  _syncPills('duaPills',    _activeDua,    'dua');
   applyFilters();
 });
 
@@ -1897,7 +2032,7 @@ function resetDrawerForm() {
   document.getElementById('dLocation').value      = '';
   document.getElementById('dSalary').value        = '';
   document.getElementById('dUrl').value           = '';
-  document.getElementById('dDua').checked         = false;
+  _setDrawerTags([]);
   document.getElementById('dRecruiterName').value = '';
   document.getElementById('dRecruiterEmail').value = '';
   document.getElementById('commentList').innerHTML = '';
@@ -1935,7 +2070,7 @@ function fillDrawer(a) {
   document.getElementById('dLocation').value       = a.location      || '';
   document.getElementById('dSalary').value         = a.salary_range  || '';
   document.getElementById('dUrl').value            = a.url           || '';
-  document.getElementById('dDua').checked          = !!a.dua;
+  _setDrawerTags(a.tags);
   document.getElementById('dRecruiterName').value  = a.recruiter_name  || '';
   document.getElementById('dRecruiterEmail').value = a.recruiter_email || '';
 }
@@ -1969,7 +2104,7 @@ async function saveDrawer() {
     role_title:      role,
     status:          document.getElementById('dStatus').value,
     ...(document.getElementById('dDateApplied').value ? { date_applied: document.getElementById('dDateApplied').value } : {}),
-    dua:             document.getElementById('dDua').checked,
+    tags:            (_commitTagInput(), _drawerTags),
     job_source:      document.getElementById('dJobSource').value.trim(),
     location:        document.getElementById('dLocation').value.trim(),
     salary_range:    document.getElementById('dSalary').value.trim(),

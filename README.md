@@ -28,15 +28,15 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - **Branding asset cache-busting** — `favicon.png` and `img/{logo.png,logo-dark.png,logo-light.png,chat-icon.png,teams-color-icon.png,teams-outline-icon.png,slack-app-icon.png}` get the same `no-store` treatment as HTML (see `_NO_CACHE_PATHS` in `api.py`), since these filenames get overwritten in place whenever the logo/icon is redesigned and would otherwise serve stale cached bytes indefinitely
 
 ### Application Tracker
-- Full CRUD for job applications — company (via Logo.dev search), role, status, recruiter, salary, DUA tracking
+- Full CRUD for job applications — company (via Logo.dev search), role, status, recruiter, salary, custom tags
 - **Match scoring** — Claude-powered resume↔JD fit score (0–100) with category badge (Strong Match / Good Match / Stretch / Long Shot) and per-dimension breakdown; Rescore button per row
-- **DUA indicator** — tag and filter applications reported to unemployment (DUA)
+- **Tags** — free-form per-application tags (max 20 per app, 30 chars each); type-to-search multi-select filter (matches any selected tag)
 - **Auto `date_applied`** — setting status to "Applied" automatically sets today's date if not already present
 - **Run agent from tracker** — ▶ icon on each row opens the agent page with the app pre-selected and JD loaded from Drive
 - **Setup Drive folder** — ⊕ icon on rows without a Drive folder creates the folder and attempts JD capture from the posting URL in the background
 - Comments/notes system per application with timestamped history
 - Linked agent runs — automatically links generated resumes/prep docs to applications; editing the posting URL re-captures the JD
-- Sorting, filtering (status, match score, DUA, search), pagination
+- Sorting, filtering (status, match score, tags, search), pagination
 - CSV and formatted Excel export with frozen headers and alternating rows
 
 ### Calendar
@@ -383,7 +383,7 @@ used for the run.
 **`track update`/`track note`/`track delete`** mirror the Slack modal flows:
 `track update` is two steps (pick an application, then edit a form pre-filled
 from the current record — status, date applied, job source, location, salary,
-URL, DUA flag, recruiter, plus an optional note) via `PUT /api/applications/{id}`;
+URL, tags, recruiter, plus an optional note) via `PUT /api/applications/{id}`;
 `track note` posts a comment via `POST /api/applications/{id}/comments`; `track
 delete` shows a destructive-styled confirm card before calling
 `DELETE /api/applications/{id}`.

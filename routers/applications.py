@@ -63,7 +63,7 @@ class ApplicationCreate(BaseModel):
     role_title: str
     status: str = "Researching"
     date_applied: str | None = None
-    dua: bool = False
+    tags: list[str] = []
     job_source: str = ""
     location: str = ""
     salary_range: str = ""
@@ -80,7 +80,7 @@ class ApplicationUpdate(BaseModel):
     role_title: str | None = None
     status: str | None = None
     date_applied: str | None = None
-    dua: bool | None = None
+    tags: list[str] | None = None
     job_source: str | None = None
     location: str | None = None
     salary_range: str | None = None
@@ -419,6 +419,10 @@ async def create_application(body: ApplicationCreate, request: Request, response
         raise HTTPException(400, "url must start with http:// or https://")
     if body.company_logo_url and not body.company_logo_url.startswith("https://"):
         raise HTTPException(400, "company_logo_url must start with https://")
+    try:
+        tags = app_store.normalize_tags(body.tags)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
     now = _now()
     record = {
@@ -431,7 +435,7 @@ async def create_application(body: ApplicationCreate, request: Request, response
         "status_changed_at": now,
         "comments":         [],
         "audit_log":        [],
-        **body.model_dump(),
+        **{**body.model_dump(), "tags": tags},
     }
     record["audit_log"].append(_audit_entry("created", actor))
     record = app_store.save_application(user_id, record)
@@ -481,6 +485,11 @@ async def update_application(app_id: str, body: ApplicationUpdate, request: Requ
         raise HTTPException(400, "url must start with http:// or https://")
     if updates.get("company_logo_url") and not updates["company_logo_url"].startswith("https://"):
         raise HTTPException(400, "company_logo_url must start with https://")
+    if updates.get("tags") is not None:
+        try:
+            updates["tags"] = app_store.normalize_tags(updates["tags"])
+        except ValueError as e:
+            raise HTTPException(400, str(e))
 
     # Compute diff before applying
     changes = _diff(record, {**record, **updates})

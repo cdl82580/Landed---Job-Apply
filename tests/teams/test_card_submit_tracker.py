@@ -258,19 +258,19 @@ class TestSubmitTrackUpdateEdit:
         assert "recruiter_email" not in updates
         assert updates["status"] == "Applied"
 
-    async def test_dua_always_included_even_when_false(self, bot):
+    async def test_empty_tags_included_to_clear(self, bot):
         ctx = make_ctx(value={"app_id": "app-001", "status": "Applied"})
         with patch("api_client.update_application", return_value=SAMPLE_APP) as mock_update:
             await bot._submit_track_update_edit(ctx, ctx.activity.value, USER)
         updates = mock_update.call_args.args[1]
-        assert updates["dua"] is False
+        assert updates["tags"] == []
 
-    async def test_dua_true_included(self, bot):
-        ctx = make_ctx(value={"app_id": "app-001", "status": "Applied", "dua": "true"})
+    async def test_tags_parsed_from_comma_list(self, bot):
+        ctx = make_ctx(value={"app_id": "app-001", "status": "Applied", "tags": "DUA Reported, Referral ,"})
         with patch("api_client.update_application", return_value=SAMPLE_APP) as mock_update:
             await bot._submit_track_update_edit(ctx, ctx.activity.value, USER)
         updates = mock_update.call_args.args[1]
-        assert updates["dua"] is True
+        assert updates["tags"] == ["DUA Reported", "Referral"]
 
     async def test_date_applied_gets_time_suffix(self, bot):
         ctx = make_ctx(value={"app_id": "app-001", "status": "Applied", "date_applied": "2026-07-01"})

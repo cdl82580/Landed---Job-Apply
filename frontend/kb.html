@@ -1245,10 +1245,10 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
 
 <h2>The List</h2>
 <p>Each row shows Company (with logo), Role, Status, Match score, and a date column you can switch between Updated / Created / Applied. Click any column header to sort by it. A stats bar across the top totals Interviewing, Applied, Offers, and Rejected counts.</p>
-<p><strong>Filters:</strong> a search box (company, role, or domain), a Status pill row (Interviewing, Phone Screen, Applied, Researching, On Hold, Offer, Rejected, No Response, Not Applying), a Match pill row (Strong Match, Good Match, Stretch, Long Shot, Not Scored), and a DUA pill row (Filed / Not Filed). "✕ Clear" resets everything.</p>
+<p><strong>Filters:</strong> a search box (company, role, or domain), a Status pill row (Interviewing, Phone Screen, Applied, Researching, On Hold, Offer, Rejected, No Response, Not Applying), a Match pill row (Strong Match, Good Match, Stretch, Long Shot, Not Scored), and a type-to-search Tags dropdown (select one or more tags; an application matches if it has any of them). "✕ Clear" resets everything.</p>
 
 <h2>Adding &amp; Editing</h2>
-<p>A slide-out drawer handles both. Company Name and Role Title are required (with company-name autocomplete pulling a logo); everything else is optional — status, date applied, job source, location/remote, salary range, posting URL, a "reported to unemployment (DUA)" checkbox, and recruiter name/email. New applications open straight into edit mode; existing ones open read-only with an Edit button.</p>
+<p>A slide-out drawer handles both. Company Name and Role Title are required (with company-name autocomplete pulling a logo); everything else is optional — status, date applied, job source, location/remote, salary range, posting URL, custom tags (type a tag and press Enter; existing tags are suggested as you type), and recruiter name/email. New applications open straight into edit mode; existing ones open read-only with an Edit button.</p>
 
 <h2>Comments</h2>
 <p>The same drawer has a Notes &amp; Comments section — add one from a textarea, edit any comment inline via its pencil icon, or delete one via its trash icon (no confirmation prompt on delete).</p>
@@ -1362,7 +1362,7 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
 <p>Every account: name/email, role, app count, run count, email-verified status, and a toggleable Last Login / Joined date column. Filter by name/email search, role, verified status, or a date range; sort any column. The only row action is <strong>Edit</strong>, which opens a modal for display name, email, role (user/admin), active/deactivated status, the verified checkbox, and a "Resend Verification" button. There's no delete-user action from this tab.</p>
 
 <h2>Applications</h2>
-<p>Every tracked application across every user, with the same status filter chips as the user-facing tracker plus a user filter. Edit opens the full application detail (priority, dates, job source, salary, URL, DUA flag, recruiter, comments); Delete asks for confirmation first — this cannot be undone.</p>
+<p>Every tracked application across every user, with the same status filter chips as the user-facing tracker plus a user filter. Edit opens the full application detail (priority, dates, job source, salary, URL, tags, recruiter, comments); Delete asks for confirmation first — this cannot be undone.</p>
 
 <h2>Agent Runs</h2>
 <p>Every run from every agent, filterable by type (Resume, Resume Builder, Optimize, App Questions, Interview Prep, Thank You, Match Score) and status (Completed, Failed, Running, Queued). Clicking a row opens a read-only detail drawer — identification, application, user, timing (with computed duration), output files/Drive link, and type-specific extras like the match score's reasoning or the optimize instruction that was given.</p>
@@ -1986,7 +1986,7 @@ P1: "When [Company] talks about 90-day implementation cycles, I recognize that a
 <p>Shows full application details, including a link to its linked Google Drive output folder (most recently linked run) if one exists, alongside the job posting link.</p>
 
 <h2>track update</h2>
-<p>Two-step: pick an application, then edit a form pre-filled from the current record — status, date applied, job source, location, salary, URL, DUA flag, and recruiter. Setting status to Applied auto-sets the date applied.</p>
+<p>Two-step: pick an application, then edit a form pre-filled from the current record — status, date applied, job source, location, salary, URL, tags (comma-separated), and recruiter. Setting status to Applied auto-sets the date applied.</p>
 
 <h2>track note</h2>
 <p>Adds a comment to an application record.</p>

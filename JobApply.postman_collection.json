@@ -541,7 +541,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"company\": \"Salesforce\",\n  \"domain\": \"salesforce.com\",\n  \"role_title\": \"Solution Engineer\",\n  \"status\": \"Applied\",\n  \"priority\": \"High\",\n  \"url\": \"https://salesforce.com/careers/…\",\n  \"job_source\": \"LinkedIn\",\n  \"location\": \"Remote\",\n  \"salary_range\": \"$130k–$160k\",\n  \"dua\": false\n}"
+              "raw": "{\n  \"company\": \"Salesforce\",\n  \"domain\": \"salesforce.com\",\n  \"role_title\": \"Solution Engineer\",\n  \"status\": \"Applied\",\n  \"priority\": \"High\",\n  \"url\": \"https://salesforce.com/careers/…\",\n  \"job_source\": \"LinkedIn\",\n  \"location\": \"Remote\",\n  \"salary_range\": \"$130k–$160k\",\n  \"tags\": [\"DUA Reported\"]\n}"
             }
           }
         },

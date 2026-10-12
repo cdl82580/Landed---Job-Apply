@@ -46,10 +46,32 @@ def _now() -> str:
 
 _INDEX_FIELDS = {
     "id", "company", "domain", "company_logo_url", "role_title",
-    "status", "date_applied", "last_updated", "created_at", "priority", "dua",
+    "status", "date_applied", "last_updated", "created_at", "priority", "tags",
     "url", "recruiter_name", "recruiter_email", "location", "salary_range", "job_source",
     "linked_runs", "match_score", "status_changed_at",
 }
+
+
+MAX_TAGS = 20
+MAX_TAG_LEN = 30
+
+
+def normalize_tags(tags: list[str]) -> list[str]:
+    """Trim, drop empties, dedupe case-insensitively (first casing wins).
+    Raises ValueError if limits are exceeded."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for t in tags:
+        t = " ".join(str(t).split())
+        if not t or t.lower() in seen:
+            continue
+        if len(t) > MAX_TAG_LEN:
+            raise ValueError(f"tags must be {MAX_TAG_LEN} characters or fewer")
+        seen.add(t.lower())
+        out.append(t)
+    if len(out) > MAX_TAGS:
+        raise ValueError(f"at most {MAX_TAGS} tags per application")
+    return out
 
 
 def _to_index_entry(record: dict[str, Any]) -> dict[str, Any]:

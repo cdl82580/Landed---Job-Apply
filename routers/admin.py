@@ -82,7 +82,7 @@ class AppUpdate(BaseModel):
     status: str | None = None
     priority: str | None = None
     date_applied: str | None = None
-    dua: bool | None = None
+    tags: list[str] | None = None
     job_source: str | None = None
     location: str | None = None
     salary_range: str | None = None
@@ -290,6 +290,11 @@ async def update_application(user_id: str, app_id: str, body: AppUpdate, request
         raise HTTPException(400, f"priority must be one of: {', '.join(sorted(VALID_PRIORITIES))}")
 
     updates = body.model_dump(exclude_unset=True)
+    if updates.get("tags") is not None:
+        try:
+            updates["tags"] = app_store.normalize_tags(updates["tags"])
+        except ValueError as e:
+            raise HTTPException(400, str(e))
     record.update(updates)
     record["updated_at"] = _now()
     record["updated_by"] = admin["email"]

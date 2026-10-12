@@ -1097,8 +1097,8 @@
     </div>
     <div class="field"><label>Job Posting URL <span class="opt">(optional)</span></label>
       <input type="url" id="dUrl" data-field placeholder="https://…"></div>
-    <div class="check-row"><input type="checkbox" id="dDua" data-field>
-      <label for="dDua">Reported to unemployment (DUA)?</label></div>
+    <div class="field"><label>Tags <span class="opt">(optional, comma-separated)</span></label>
+      <input type="text" id="dTags" data-field placeholder="DUA Reported, Referral"></div>
 
     <div class="section-label">Recruiter <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
     <div class="field-row">
@@ -2611,7 +2611,7 @@ function fillFields(a) {
   document.getElementById('dLocation').value       = a.location       || '';
   document.getElementById('dSalary').value         = a.salary_range   || '';
   document.getElementById('dUrl').value            = a.url            || '';
-  document.getElementById('dDua').checked          = !!a.dua;
+  document.getElementById('dTags').value           = (a.tags || []).join(', ');
   document.getElementById('dRecruiterName').value  = a.recruiter_name  || '';
   document.getElementById('dRecruiterEmail').value = a.recruiter_email || '';
 }
@@ -2629,7 +2629,7 @@ async function saveDrawer() {
     status:          document.getElementById('dStatus').value,
     priority:        document.getElementById('dPriority').value,
     date_applied:    document.getElementById('dDateApplied').value || null,
-    dua:             document.getElementById('dDua').checked,
+    tags:            document.getElementById('dTags').value.split(',').map(t => t.trim()).filter(Boolean),
     job_source:      document.getElementById('dJobSource').value.trim(),
     location:        document.getElementById('dLocation').value.trim(),
     salary_range:    document.getElementById('dSalary').value.trim(),
@@ -3141,7 +3141,7 @@ function _appRows(list) {
       a._user_email||'', a.date_applied||'', a.created_at||'', a.last_updated||'', a.status_changed_at||'',
       a.url||'', a.recruiter_name||'', a.recruiter_email||'',
       a.location||'', a.salary_range||'', a.job_source||'',
-      a.dua ? 'Yes' : 'No',
+      (a.tags || []).join('; '),
       ms ? (ms.score ?? '') : '', ms ? (ms.category || '') : '',
       linked ? linked.length : 0,
     ];
@@ -3150,7 +3150,7 @@ function _appRows(list) {
 const APP_HEADERS = ['Application ID','Company','Domain','Role Title','Status','Priority','Owner Email',
                      'Date Applied','Created At','Last Updated','Status Changed At',
                      'URL','Recruiter Name','Recruiter Email',
-                     'Location','Salary Range','Job Source','DUA',
+                     'Location','Salary Range','Job Source','Tags',
                      'Match Score','Match Category','Linked Runs'];
 
 function _runRows(list) {

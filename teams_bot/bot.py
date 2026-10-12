@@ -2555,8 +2555,8 @@ class JobApplyBot(ActivityHandler):
                     "value": a.get("url", ""), "placeholder": "https://…",
                 },
                 {
-                    "type": "Input.Toggle", "id": "dua", "title": "Reported to DUA (unemployment)",
-                    "value": "true" if a.get("dua") else "false",
+                    "type": "Input.Text", "id": "tags", "label": "Tags (optional, comma-separated)",
+                    "value": ", ".join(a.get("tags") or []), "placeholder": "DUA Reported, Referral…",
                 },
                 {
                     "type": "Input.Text", "id": "recruiter_name", "label": "Recruiter Name (optional)",
@@ -2594,13 +2594,13 @@ class JobApplyBot(ActivityHandler):
             "location": (data.get("location") or "").strip() or None,
             "salary_range": (data.get("salary_range") or "").strip() or None,
             "url": (data.get("url") or "").strip() or None,
-            "dua": data.get("dua") == "true",
+            "tags": [t.strip() for t in (data.get("tags") or "").split(",") if t.strip()],
             "recruiter_name": (data.get("recruiter_name") or "").strip() or None,
             "recruiter_email": (data.get("recruiter_email") or "").strip() or None,
         }
-        # Strip Nones so we don't overwrite fields with null — keep "dua" always
-        # since False is a meaningful value, not "field wasn't provided".
-        updates = {k: v for k, v in updates.items() if v is not None or k == "dua"}
+        # Strip Nones so we don't overwrite fields with null. An empty tags list
+        # is kept — it means "clear all tags".
+        updates = {k: v for k, v in updates.items() if v is not None}
         note = (data.get("note") or "").strip()
 
         try:
