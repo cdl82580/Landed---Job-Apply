@@ -532,7 +532,7 @@
           "request": {
             "method": "POST",
             "url": "{{base_url}}/api/applications",
-            "description": "Create a new application. `url` must start with http:// or https:// if provided. `company_logo_url` is no longer used — logos are rendered dynamically from `domain` via Logo.dev.",
+            "description": "Create a new application. `url` must start with http:// or https:// if provided. `company_logo_url` is no longer used — logos are rendered dynamically from `domain` via Logo.dev. `tags` is a list of free-form strings (trimmed, case-insensitively de-duplicated; max 20 tags, 30 characters each; 400 if exceeded). On update, `tags` replaces the whole list — send `[]` to clear. Replaces the removed `dua` boolean.",
             "header": [
               {
                 "key": "Content-Type",
@@ -558,7 +558,7 @@
           "request": {
             "method": "PUT",
             "url": "{{base_url}}/api/applications/{{app_id}}",
-            "description": "Partial update — send only changed fields. Diffs are recorded in the application `audit_log`.\n\n**Side effects:**\n- Setting `status: Applied` auto-sets `date_applied` to today if not already present\n- Changing `url` triggers background JD extraction: creates/updates the Drive folder and saves `job_description.md`",
+            "description": "Partial update — send only changed fields. Diffs are recorded in the application `audit_log`. `tags` is a list of free-form strings (trimmed, case-insensitively de-duplicated; max 20 tags, 30 characters each; 400 if exceeded). On update, `tags` replaces the whole list — send `[]` to clear. Replaces the removed `dua` boolean.\n\n**Side effects:**\n- Setting `status: Applied` auto-sets `date_applied` to today if not already present\n- Changing `url` triggers background JD extraction: creates/updates the Drive folder and saves `job_description.md`",
             "header": [
               {
                 "key": "Content-Type",
@@ -1502,7 +1502,7 @@
           "request": {
             "method": "PUT",
             "url": "{{base_url}}/api/admin/applications/{{user_id}}/{{app_id}}",
-            "description": "Admin update any application.",
+            "description": "Admin update any application. `tags` (list of strings) replaces the whole tag list and is validated the same way as the user endpoint.",
             "header": [
               {
                 "key": "Content-Type",
