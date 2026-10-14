@@ -37,6 +37,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 - Comments/notes system per application with timestamped history
 - Linked agent runs — automatically links generated resumes/prep docs to applications; editing the posting URL re-captures the JD
 - Sorting, filtering (status, match score, tags, search), pagination
+- **Export CSV** — toolbar button downloads the currently filtered and sorted applications as a CSV (client-side)
 - CSV and formatted Excel export with frozen headers and alternating rows
 
 ### Calendar

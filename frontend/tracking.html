@@ -911,7 +911,10 @@
   <!-- ── Toolbar ──────────────────────────────────────────────────── -->
   <div class="toolbar">
     <div class="toolbar-title">Applications</div>
-    <button class="btn" id="addBtn">+ Add Application</button>
+    <div style="display:flex;gap:.5rem">
+      <button class="btn btn-ghost" id="exportCsvBtn">Export CSV</button>
+      <button class="btn" id="addBtn">+ Add Application</button>
+    </div>
   </div>
 
   <!-- ── Filters ──────────────────────────────────────────────────── -->
@@ -1524,6 +1527,32 @@ function applyFilters() {
   chip.classList.toggle('hidden', !isFiltered);
   renderTable();
 }
+
+function exportCsv() {
+  const cols = [
+    ['Company', a => a.company], ['Role', a => a.role_title], ['Status', a => a.status],
+    ['Priority', a => a.priority], ['Date Applied', a => a.date_applied],
+    ['Last Updated', a => a.last_updated], ['Location', a => a.location],
+    ['Salary Range', a => a.salary_range], ['Job Source', a => a.job_source],
+    ['Match Score', a => a.match_score?.score], ['Match Category', a => a.match_score?.category],
+    ['Tags', a => (a.tags || []).join('; ')], ['Recruiter', a => a.recruiter_name],
+    ['Recruiter Email', a => a.recruiter_email], ['URL', a => a.url],
+  ];
+  const cell = v => {
+    let t = v == null ? '' : String(v);
+    if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
+    return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  };
+  const rows = [cols.map(c => c[0]).join(',')]
+    .concat(_filtered.map(a => cols.map(c => cell(c[1](a))).join(',')));
+  const blob = new Blob(['\ufeff' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `applications_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
 
 function renderTable() {
   const tbody  = document.getElementById('appTableBody');
