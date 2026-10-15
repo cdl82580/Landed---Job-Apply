@@ -64,3 +64,17 @@ def test_tool_exception_is_contained():
         raise RuntimeError("s3 down")
     with patch.object(chat_tools.run_store, "list_for_user", boom):
         assert "error" in _run("list_my_agent_runs")
+
+
+def test_calendar_defaults_to_upcoming_only():
+    got = {}
+
+    def fake(uid, from_dt=None, to_dt=None):
+        got["from"] = from_dt
+        return []
+
+    with patch.object(chat_tools.cal_store, "list_events", fake):
+        _run("list_my_calendar_events")
+        assert got["from"] and got["from"].endswith("Z")
+        _run("list_my_calendar_events", {"from": "1970-01-01T00:00:00Z"})
+        assert got["from"] == "1970-01-01T00:00:00Z"

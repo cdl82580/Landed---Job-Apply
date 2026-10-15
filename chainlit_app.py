@@ -482,6 +482,11 @@ async def on_message(message: cl.Message):
         return
 
     system_prompt = cl.user_session.get("system_prompt") or _SYSTEM_PROMPT_HEADER
+    system_prompt += (
+        "\n\nCurrent date/time (UTC): "
+        + time.strftime("%A, %B %d, %Y %H:%M", time.gmtime())
+        + ". Treat \"upcoming\" as events after this moment."
+    )
     history = cl.user_session.get("history") or []
     log_messages = cl.user_session.get("log_messages") or []
     escalations = cl.user_session.get("escalations") or []

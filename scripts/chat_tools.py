@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from typing import Any
 
 from scripts import agent_runs as run_store
@@ -62,11 +63,12 @@ CHAT_TOOLS = [
     },
     {
         "name": "list_my_calendar_events",
-        "description": "The user's calendar events (interviews, follow-ups), optionally bounded by ISO datetimes.",
+        "description": "The user's calendar events (interviews, follow-ups). With no bounds this returns only "
+            "events from now onward (upcoming). To include past events pass 'from' explicitly, e.g. 1970-01-01T00:00:00Z.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "from": {"type": "string", "description": "ISO datetime lower bound"},
+                "from": {"type": "string", "description": "ISO datetime lower bound (default: now)"},
                 "to": {"type": "string", "description": "ISO datetime upper bound"},
             },
         },
@@ -154,6 +156,8 @@ def _dispatch(name: str, args: dict, user_id: str, email: str) -> Any:
     if name == "list_my_calendar_events":
         from_dt = args.get("from") if isinstance(args.get("from"), str) else None
         to_dt = args.get("to") if isinstance(args.get("to"), str) else None
+        if not from_dt:
+            from_dt = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         events = cal_store.list_events(user_id, from_dt=from_dt, to_dt=to_dt)
         return {"total": len(events), "events": events[:_MAX_LIST_ITEMS]}
 
