@@ -187,6 +187,17 @@ FLAG_FOR_TEAM_TOOL = {
 
 _DATA_TOOL_NAMES = {t["name"] for t in CHAT_TOOLS}
 
+_TOOL_LABELS = {
+    "get_my_profile": "Checking your profile…",
+    "list_my_applications": "Looking through your applications…",
+    "get_my_application": "Opening your application…",
+    "list_my_agent_runs": "Checking your agent runs…",
+    "get_my_agent_run": "Opening your agent run…",
+    "list_my_calendar_events": "Checking your calendar…",
+    "list_my_drive_folders": "Checking your Drive folders…",
+    "get_my_drive_job_posting": "Reading the job posting…",
+}
+
 _FLAG_REASON_LABELS = {
     "unanswered_question": "Unanswered question",
     "bug_report": "Bug report",
@@ -496,22 +507,32 @@ async def on_message(message: cl.Message):
     })
 
     tool_names_used: list[str] = []
+    # Not sent yet: stream_token() sends it on the first token, so the
+    # Thinking / lookup steps below render above the answer.
     reply = cl.Message(content="")
-    await reply.send()
 
     # Usually one round (plain answer or answer + a background tool call).
     # Cap it so a confused model can't loop tool calls forever.
     for _ in range(6):
-        async with _get_client().messages.stream(
-            model=DEFAULT_MODEL,
-            max_tokens=1024,
-            system=system_prompt,
-            messages=history,
-            tools=[FLAG_FOR_TEAM_TOOL, *CHAT_TOOLS],
-        ) as stream:
-            async for token in stream.text_stream:
-                await reply.stream_token(token)
-            final_message = await stream.get_final_message()
+        thinking = cl.Step(name="Thinking…", type="run")
+        await thinking.send()
+        try:
+            async with _get_client().messages.stream(
+                model=DEFAULT_MODEL,
+                max_tokens=1024,
+                system=system_prompt,
+                messages=history,
+                tools=[FLAG_FOR_TEAM_TOOL, *CHAT_TOOLS],
+            ) as stream:
+                async for token in stream.text_stream:
+                    if thinking is not None:
+                        await thinking.remove()
+                        thinking = None
+                    await reply.stream_token(token)
+                final_message = await stream.get_final_message()
+        finally:
+            if thinking is not None:
+                await thinking.remove()
 
         history.append({"role": "assistant", "content": final_message.content})
 
@@ -533,9 +554,10 @@ async def on_message(message: cl.Message):
         for call in tool_calls:
             if call.name in _DATA_TOOL_NAMES:
                 meta = (user.metadata or {}) if user else {}
-                content = await asyncio.to_thread(
-                    run_tool, call.name, call.input, user_id, meta.get("email", ""),
-                )
+                async with cl.Step(name=_TOOL_LABELS.get(call.name, "Looking that up…"), type="tool"):
+                    content = await asyncio.to_thread(
+                        run_tool, call.name, call.input, user_id, meta.get("email", ""),
+                    )
                 tool_names_used.append(call.name)
                 tool_results.append({"type": "tool_result", "tool_use_id": call.id, "content": content})
                 continue
@@ -578,4 +600,7 @@ async def on_message(message: cl.Message):
     cl.user_session.set("escalations", escalations)
     _persist_conversation(user, conversation_id, started_at, log_messages, escalations)
 
-    await reply.update()
+    if reply.content:
+        await reply.update()
+    else:
+        await reply.send()
