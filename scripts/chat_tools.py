@@ -91,6 +91,103 @@ CHAT_TOOLS = [
 
 _APP_DETAIL_DROP = {"audit_log"}
 
+# Write tools never run on the model's say-so alone: chainlit_app.py shows the
+# user describe_write() and only calls run_tool() after they click Confirm.
+# They reuse the router handlers so validation, audit logs and notifications
+# are identical to the web UI.
+_STATUSES = [
+    "Not Applying", "Researching", "Applied", "Phone Screen",
+    "Interviewing", "On Hold", "Offer", "Rejected", "No Response",
+]
+_EVENT_TYPES = ["interview", "phone_screen", "follow_up", "deadline", "offer_deadline", "prep", "custom"]
+
+WRITE_TOOLS = [
+    {
+        "name": "update_application_status",
+        "description": "Change the status of one of the user's applications. The user is asked to confirm before it runs.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "app_id": {"type": "string"},
+                "status": {"type": "string", "enum": _STATUSES},
+            },
+            "required": ["app_id", "status"],
+        },
+    },
+    {
+        "name": "add_application_comment",
+        "description": "Add a comment to one of the user's applications. The user is asked to confirm before it runs.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"app_id": {"type": "string"}, "text": {"type": "string"}},
+            "required": ["app_id", "text"],
+        },
+    },
+    {
+        "name": "create_calendar_event",
+        "description": (
+            "Create a calendar event for the user. 'datetime' is ISO 8601 UTC (e.g. 2026-06-10T14:00:00Z); "
+            "convert from the user's local time and ask for their timezone if unclear. "
+            "The user is asked to confirm before it runs."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "datetime": {"type": "string"},
+                "event_type": {"type": "string", "enum": _EVENT_TYPES},
+                "timezone": {"type": "string", "description": "IANA name for display, e.g. America/New_York"},
+                "duration_minutes": {"type": "integer"},
+                "notes": {"type": "string"},
+                "app_id": {"type": "string", "description": "Link to one of the user's applications"},
+            },
+            "required": ["title", "datetime"],
+        },
+    },
+    {
+        "name": "update_calendar_event",
+        "description": "Edit fields on one of the user's existing calendar events (get event_id from list_my_calendar_events). The user is asked to confirm before it runs.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "string"},
+                "title": {"type": "string"},
+                "datetime": {"type": "string"},
+                "event_type": {"type": "string", "enum": _EVENT_TYPES},
+                "timezone": {"type": "string"},
+                "duration_minutes": {"type": "integer"},
+                "notes": {"type": "string"},
+            },
+            "required": ["event_id"],
+        },
+    },
+]
+
+WRITE_TOOL_NAMES = {t["name"] for t in WRITE_TOOLS}
+
+_EVENT_FIELDS = ("title", "datetime", "event_type", "timezone", "duration_minutes", "notes")
+
+
+def describe_write(name: str, args: dict, user_id: str) -> str:
+    """Plain-language summary of a pending write, shown to the user to confirm."""
+    args = args or {}
+    if name in ("update_application_status", "add_application_comment"):
+        rec = app_store.get_application(user_id, args.get("app_id", "")) if _valid_id(args.get("app_id")) else None
+        label = f"{rec.get('company')} — {rec.get('role_title')}" if rec else "an application"
+        if name == "update_application_status":
+            return f"Change status of **{label}** from {rec.get('status') if rec else '?'} to **{args.get('status')}**."
+        return f"Add a comment to **{label}**:\n\n> {str(args.get('text', ''))[:500]}"
+    if name == "create_calendar_event":
+        return (
+            f"Create event **{args.get('title')}** ({args.get('event_type', 'custom')}) "
+            f"at {args.get('datetime')} {args.get('timezone', '')}".rstrip()
+            + (f", {args['duration_minutes']} min" if args.get("duration_minutes") else "") + "."
+        )
+    if name == "update_calendar_event":
+        changes = ", ".join(f"{k} → {args[k]}" for k in _EVENT_FIELDS if k in args)
+        return f"Update calendar event: {changes or 'no changes'}."
+    return f"Run {name}."
+
 
 def _clip(value: Any) -> Any:
     if isinstance(value, str) and len(value) > _MAX_TEXT_CHARS:
@@ -122,7 +219,52 @@ def _linked_folder_ids(user_id: str) -> set[str]:
     }
 
 
+def _fake_request(user_id: str, email: str):
+    from types import SimpleNamespace  # noqa: PLC0415
+    return SimpleNamespace(state=SimpleNamespace(user={"user_id": user_id, "email": email}))
+
+
+def _write_dispatch(name: str, args: dict, user_id: str, email: str) -> Any:
+    import asyncio  # noqa: PLC0415
+    from fastapi import HTTPException, Response  # noqa: PLC0415
+    from pydantic import ValidationError  # noqa: PLC0415
+    from routers import applications as apps_router  # noqa: PLC0415
+    from routers import calendar as cal_router  # noqa: PLC0415
+
+    req = _fake_request(user_id, email)
+    try:
+        if name in ("update_application_status", "add_application_comment"):
+            if not _valid_id(args.get("app_id")):
+                return {"error": "invalid app_id"}
+            if name == "update_application_status":
+                body = apps_router.ApplicationUpdate(status=args.get("status"))
+                rec = asyncio.run(apps_router.update_application(args["app_id"], body, req, Response()))
+                return {"ok": True, "id": rec["id"], "status": rec["status"]}
+            body = apps_router.CommentCreate(text=str(args.get("text", "")))
+            c = asyncio.run(apps_router.add_comment(args["app_id"], body, req))
+            return {"ok": True, "comment_id": c["id"]}
+
+        if name == "create_calendar_event":
+            fields = {k: args[k] for k in (*_EVENT_FIELDS, "app_id") if k in args}
+            ev = asyncio.run(cal_router.create_calendar_event(cal_router.EventCreate(**fields), req))
+            return {"ok": True, "event_id": ev["id"], "title": ev["title"], "datetime": ev["datetime"]}
+
+        if name == "update_calendar_event":
+            fields = {k: args[k] for k in _EVENT_FIELDS if k in args}
+            body = cal_router.EventUpdate(**fields)
+            ev = asyncio.run(cal_router.update_calendar_event(str(args.get("event_id", "")), body, req))
+            return {"ok": True, "event_id": ev["id"], "title": ev["title"], "datetime": ev["datetime"]}
+    except HTTPException as exc:
+        return {"error": str(exc.detail)}
+    except ValidationError as exc:
+        return {"error": "; ".join(e["msg"] for e in exc.errors())}
+    return {"error": f"unknown tool {name}"}
+
+
 def _dispatch(name: str, args: dict, user_id: str, email: str) -> Any:
+    if name in WRITE_TOOL_NAMES:
+        return _write_dispatch(name, args, user_id, email)
+
     if name == "get_my_profile":
         return {
             "profile_text": storage.get_profile(user_id) or "",

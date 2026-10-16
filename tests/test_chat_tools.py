@@ -78,3 +78,50 @@ def test_calendar_defaults_to_upcoming_only():
         assert got["from"] and got["from"].endswith("Z")
         _run("list_my_calendar_events", {"from": "1970-01-01T00:00:00Z"})
         assert got["from"] == "1970-01-01T00:00:00Z"
+
+
+def test_write_tools_have_no_user_identity_params():
+    for tool in chat_tools.WRITE_TOOLS:
+        assert not {"user_id", "email"} & set(tool["input_schema"]["properties"]), tool["name"]
+
+
+def test_write_tools_reject_bad_ids_and_anonymous():
+    assert _run("update_application_status", {"app_id": "../x", "status": "Applied"}) == {"error": "invalid app_id"}
+    assert _run("create_calendar_event", {"title": "x", "datetime": "2026-01-01T00:00:00Z"},
+                user_id="anonymous") == {"error": "not authenticated"}
+
+
+def test_update_status_scoped_to_session_user_and_validated(authed_client):
+    from unittest.mock import MagicMock
+    seen = {}
+
+    def fake_get(uid, aid):
+        seen["uid"] = uid
+        return None
+
+    with patch("scripts.applications.get_application", fake_get):
+        out = _run("update_application_status", {"app_id": "abc", "status": "Offer"}, user_id="user-a")
+    assert seen["uid"] == "user-a"
+    assert out == {"error": "Application not found"}
+
+
+def test_invalid_status_and_event_fields_return_errors():
+    assert "error" in _run("update_application_status", {"app_id": "abc", "status": "Bogus"})
+    assert "error" in _run("create_calendar_event", {"title": "x", "datetime": "not-a-date"})
+    assert "error" in _run("update_calendar_event", {"event_id": "../../x", "title": "y"})
+
+
+def test_create_event_uses_session_user():
+    captured = {}
+
+    def fake_create(uid, record):
+        captured["uid"] = uid
+        return record
+
+    with patch.object(chat_tools.cal_store, "list_events", lambda uid, **k: []), \
+         patch.object(chat_tools.cal_store, "create_event", fake_create), \
+         patch("scripts.user_audit.log", lambda *a, **k: None):
+        out = _run("create_calendar_event",
+                   {"title": "Chat w/ X", "datetime": "2030-01-01T15:00:00Z", "user_id": "user-b"})
+    assert out["ok"] is True
+    assert captured["uid"] == "user-a"
