@@ -69,6 +69,39 @@ def clean_bullet_text(text: str) -> str:
     return cleaned[1:].strip() if cleaned.startswith("•") else cleaned
 
 
+def marked_text(para: ET.Element) -> str:
+    """Paragraph text with **...** around bold runs, only when the paragraph
+    mixes bold and non-bold runs (a bold lead-in followed by plain text).
+    Lets downstream editing rewrite such a paragraph without losing or
+    smearing the bold split; otherwise returns plain text."""
+    segs: list[list] = []
+    for r in para.iter(w("r")):
+        t = "".join(x.text or "" for x in r.findall(w("t")))
+        if not t:
+            continue
+        bold = r.find(f"{w('rPr')}/{w('b')}") is not None
+        if segs and segs[-1][0] == bold:
+            segs[-1][1] += t
+        else:
+            segs.append([bold, t])
+    if len({b for b, _ in segs}) < 2:
+        return get_text(para)
+    if segs:
+        segs[0][1] = segs[0][1].lstrip().lstrip("•")
+    out = ""
+    for bold, t in segs:
+        core = t.strip()
+        if not core:
+            out += t
+        elif bold:
+            lead = t[:len(t) - len(t.lstrip())]
+            trail = t[len(t.rstrip()):]
+            out += f"{lead}**{core}**{trail}"
+        else:
+            out += t
+    return out
+
+
 def is_section_header(para: ET.Element) -> bool:
     """Bold paragraph with a bottom border — section headers, color-agnostic."""
     text = get_text(para).strip()
@@ -174,7 +207,7 @@ def parse_xml(docx_path: Path) -> dict:
             # Summary
             if section == "SUMMARY":
                 result["summary_items"].append(
-                    {"text": clean_bullet_text(text), "bullet": is_bullet(child)}
+                    {"text": clean_bullet_text(marked_text(child)), "bullet": is_bullet(child)}
                 )
 
             # Experience: bullets, plus a paragraph-based job-header layout
@@ -185,7 +218,7 @@ def parse_xml(docx_path: Path) -> dict:
             # too, so both layouts need to be recognized.
             elif section == "EXPERIENCE" and is_bullet(child):
                 if current_job is not None:
-                    current_job["bullets"].append(clean_bullet_text(text))
+                    current_job["bullets"].append(clean_bullet_text(marked_text(child)))
             elif section == "EXPERIENCE" and is_bold(child) and not is_italic(child):
                 if current_job:
                     result["jobs"].append(current_job)
@@ -309,7 +342,7 @@ def escape_js(s: str) -> str:
 
 
 def tr(text: str, bold: bool = False, italic: bool = False, size: int = 22) -> str:
-    cleaned = " ".join(text.split())
+    cleaned = " ".join(text.replace("**", "").split())
     escaped = escape_js(cleaned)
     props = [f'text: "{escaped}"', 'font: "Calibri"', f'size: {size}', 'color: "000000"']
     if bold:

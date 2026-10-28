@@ -610,6 +610,10 @@ Tailoring guidance:
   their bullets to surface the work that matches this job's requirements.
 - For jobs roughly 10+ years old, or clearly less relevant to this role,
   make minimal changes or none at all.
+- Some fields mark a bold lead-in with **double asterisks** (e.g.
+  "**Data-Driven Impact:** Shipped ..."). Keep that pattern in your
+  replacement — bold only the lead-in, never whole sentences — and don't
+  add it to fields that don't already have it.
 - summary_N fields are the Professional Summary, one field per existing
   bullet or paragraph. Rewrite them in place in the candidate's own voice
   (per the profile guide), keeping each one's current form and roughly its
@@ -2713,6 +2717,9 @@ You receive the resume's editable fields as a JSON map of field-id -> current te
 the job description (when available), and the user's instruction.
 
 Rules:
+- Some fields mark a bold lead-in with **double asterisks**. Keep that
+  pattern (bold only the lead-in, never whole sentences) and don't add it to
+  fields that don't already have it.
 - Only include fields you are actually changing. Leave everything else alone.
 - Keep each replacement within roughly 20% of the current text's length — the
   resume must stay a single page.
@@ -3178,6 +3185,44 @@ def _entity_safe_prefix(escaped: str, limit: int = 60) -> str:
     return prefix
 
 
+def _replace_marked_paragraph(xml: str, cur: str, new: str) -> str | None:
+    """Rewrite the paragraph whose text is `cur`, rebuilding its runs from
+    `new`, where **...** marks bold segments (see gen_ats marked_text).
+
+    Run formatting is taken from the paragraph's own first run so fonts/size/
+    color survive; bold is toggled per segment. Returns None if no paragraph
+    matches.
+    """
+    want = " ".join(cur.replace("**", "").split())
+    for pm in re.finditer(r'<w:p[\s>].*?</w:p>', xml, re.S):
+        para = pm.group(0)
+        runs = re.findall(r'<w:t(?:\s[^>]*)?>([^<]*)</w:t>', para)
+        got = " ".join(html.unescape("".join(runs)).lstrip().lstrip("•").split())
+        if got != want:
+            continue
+        open_tag = re.match(r'<w:p[^>]*>', para).group(0)
+        ppr_m = re.search(r'<w:pPr>.*?</w:pPr>', para, re.S)
+        rpr_m = re.search(r'<w:r>\s*(<w:rPr>.*?</w:rPr>)', para, re.S) or \
+            re.search(r'<w:r(?:\s[^>]*)?>\s*(<w:rPr>.*?</w:rPr>)', para, re.S)
+        base = rpr_m.group(1) if rpr_m else '<w:rPr></w:rPr>'
+        base = re.sub(r'<w:b(?:Cs)?/>', '', base)
+        if re.search(r'<w:rFonts[^>]*/>', base):
+            bold = re.sub(r'(<w:rFonts[^>]*/>)', r'\1<w:b/><w:bCs/>', base, count=1)
+        else:
+            bold = base.replace('<w:rPr>', '<w:rPr><w:b/><w:bCs/>', 1)
+        out = []
+        for i, seg in enumerate(re.split(r'\*\*(.+?)\*\*', new)):
+            if not seg:
+                continue
+            out.append(
+                f'<w:r>{bold if i % 2 else base}'
+                f'<w:t xml:space="preserve">{_xml_escape(seg)}</w:t></w:r>'
+            )
+        new_para = open_tag + (ppr_m.group(0) if ppr_m else '') + ''.join(out) + '</w:p>'
+        return xml[:pm.start()] + new_para + xml[pm.end():]
+    return None
+
+
 def _apply_optimize_edits(
     xml: str,
     edits: list[dict],
@@ -3206,6 +3251,9 @@ def _apply_optimize_edits(
         field = (edit.get("field") or "").strip()
         new   = " ".join((edit.get("new") or "").split())
         attempted += 1
+        # Bold lead-ins arrive as **...** markers; anywhere they can't be
+        # honored they must never leak into the document as literal text.
+        marked = "**" in new
 
         cur = field_map.get(field)
         if not cur or not new:
@@ -3218,6 +3266,16 @@ def _apply_optimize_edits(
         if field == "tagline" and not tagline_fits(new):
             progress(f"  ✗ Skipped tagline edit: replacement does not fit on one line")
             continue
+
+        if marked or "**" in cur:
+            rebuilt = _replace_marked_paragraph(xml, cur, new)
+            if rebuilt is not None:
+                xml = rebuilt
+                succeeded += 1
+                progress(f"  ✓ {field}: {new[:70]!r}...")
+                continue
+            new = new.replace("**", "")
+            cur = cur.replace("**", "")
 
         escaped = _xml_escape(cur)
         # Try the full text first, then progressively shorter prefixes — a
