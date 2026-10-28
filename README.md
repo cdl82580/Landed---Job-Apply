@@ -97,6 +97,7 @@ Includes a full-featured application tracker, calendar, admin dashboard, webhook
 
 ### Support Chatbot
 - Floating chat widget (Chainlit Copilot) on every authenticated app page — `agents.html`, `tracking.html`, `admin.html`, `profile.html`, `calendar.html`, `api-docs.html`, and `kb.html` (gated behind a login check there, since that page is public)
+- Opens with a greeting listing what it can do (update an application's status, add a comment, create/edit calendar events, look up applications/events/runs) plus clickable suggestion buttons (`_SUGGESTIONS` in `chainlit_app.py`) that send the prompt as the user's first message
 - Mounted in-process at `/chat` via `chainlit.utils.mount_chainlit` — same FastAPI process/machine as the rest of the web app, no separate Fly process group
 - Auth bridges the existing `session` cookie: `chainlit_app.py`'s `header_auth_callback` re-verifies it with the same HMAC secret as `api.py` (`scripts/session.py`) and carries the user's role into the chat session
 - Answers are grounded in the Knowledge Base only — visible articles are filtered by the same `adminOnly` rule as `kb.html` (admin-only KB content never reaches a non-admin chat session), then stuffed into the system prompt fresh at chat start (no vector store)

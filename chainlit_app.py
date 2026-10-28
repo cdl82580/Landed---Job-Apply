@@ -452,6 +452,14 @@ def _admin_project_docs() -> str:
 
 _MAX_HISTORY_MESSAGES = 12
 
+_SUGGESTIONS = [
+    ("Update an application's status", "I'd like to update the status of one of my applications."),
+    ("Add a comment to an application", "I'd like to add a comment to one of my applications."),
+    ("Create a calendar event", "I'd like to create a calendar event."),
+    ("What's coming up?", "What events do I have coming up?"),
+    ("Show my applications", "Show me my applications."),
+]
+
 
 @cl.on_chat_start
 async def on_chat_start():
@@ -477,8 +485,25 @@ async def on_chat_start():
     cl.user_session.set("uploads", [])
 
     await cl.Message(
-        content="Hi! I can help with questions about using Landed."
+        content=(
+            "Hi! I'm the Landed assistant. I can answer questions "
+            "about using Landed, and work with your own data. For example:\n\n"
+            "- Update the status of an application\n"
+            "- Add a comment to an application\n"
+            "- Create or edit a calendar event\n"
+            "- Show your applications, upcoming events, or past runs\n\n"
+            "Tap a suggestion or just ask."
+        ),
+        actions=[
+            cl.Action(name="suggestion", payload={"text": text}, label=label)
+            for label, text in _SUGGESTIONS
+        ],
     ).send()
+
+
+@cl.action_callback("suggestion")
+async def on_suggestion(action: cl.Action):
+    await on_message(cl.Message(content=action.payload["text"]))
 
 
 @cl.on_message
