@@ -576,7 +576,7 @@ def step2_analyze(
     """
     print_step(2, "Analysis", config)
 
-    editable_fields = {k: v for k, v in field_map.items() if k not in ("tagline", "summary")}
+    editable_fields = {k: v for k, v in field_map.items() if k != "tagline"}
 
     prompt = f"""
 Job Posting:
@@ -610,6 +610,12 @@ Tailoring guidance:
   their bullets to surface the work that matches this job's requirements.
 - For jobs roughly 10+ years old, or clearly less relevant to this role,
   make minimal changes or none at all.
+- summary_N fields are the Professional Summary, one field per existing
+  bullet or paragraph. Rewrite them in place in the candidate's own voice
+  (per the profile guide), keeping each one's current form and roughly its
+  length: a bullet stays a single bullet-style line, a paragraph stays a
+  paragraph. Never add, merge, or convert items. If there are no summary_N
+  fields, the resume has no summary — do not invent one.
 - Rewrite each competency cell (competency_N) to match the JD's own language
   and priorities, keeping roughly the same length as the current text.
 - Only rewrite a jobN_title if the JD suggests a different subtitle/title
@@ -623,7 +629,6 @@ Produce a JSON object with exactly these keys:
   "framing_angle": "string - 1-2 sentences describing the single narrative thread to run through the entire resume and cover letter",
   "tagline": "string - new tagline for the resume header (1 sentence, punchy, matches framing angle, MUST be under 100 characters)",
   "top_jd_requirements": ["string", "string", "string", "string", "string"],
-  "summary": "string - full professional summary text (4-5 sentences, written in the candidate's own voice per the profile guide)",
   "resume_edits": [
     {{"field": "<field id from the editable fields map above>", "new": "<replacement text>"}}
   ],
@@ -788,82 +793,6 @@ def _extract_xml_field(xml: str, prefix: str) -> str | None:
     return first_text
 
 
-def _extract_xml_paragraph_after_heading(xml: str, heading_text: str) -> str | None:
-    """Return the first non-empty <w:p>...</w:p> block that follows the paragraph
-    containing *heading_text*.  Used for fields whose content may drift between
-    master versions (e.g. Professional Summary) so we anchor on the structural
-    position, not the text content.
-
-    Case-insensitive: this app's own wizard-generated resume templates use
-    Title Case headings ("Professional Summary"), not the ALL-CAPS convention
-    the repo's own master.docx happens to use.
-    """
-    hm = re.search(
-        r'<w:t(?:\s[^>]*)?>' + re.escape(heading_text) + r'</w:t>', xml, re.IGNORECASE,
-    )
-    if not hm:
-        return None
-    pos = hm.end()
-    for pm in re.finditer(r'<w:p[\s>].*?</w:p>', xml[pos:], re.S):
-        para = pm.group(0)
-        # Skip empty / spacer paragraphs that have no visible text
-        if re.search(r'<w:t[^>]*>[^<\s]', para):
-            return para
-    return None
-
-
-# Last-resort paragraph/run formatting for the Professional Summary — used
-# only if _build_summary_paragraph() can't find formatting on the resume's
-# own existing summary paragraph to reuse.
-_SUMMARY_PPR_FALLBACK = (
-    '<w:pPr>'
-    '<w:spacing w:before="60" w:after="80"/>'
-    '<w:jc w:val="both"/>'
-    '</w:pPr>'
-)
-_SUMMARY_RPR_FALLBACK = (
-    '<w:rPr>'
-    '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>'
-    '<w:color w:val="111827"/>'
-    '<w:sz w:val="19"/>'
-    '<w:szCs w:val="19"/>'
-    '</w:rPr>'
-)
-
-
-def _build_summary_paragraph(old_para: str, new_text: str) -> str:
-    """Construct a replacement summary <w:p> from the original paragraph.
-
-    Preserves the opening tag (paraId/rsid attributes) so Word doesn't see a
-    new paragraph, then replaces all runs with a single clean run — rebuilt
-    (rather than text-replaced in place) because a long paragraph like this
-    is the one most likely to have been split across multiple <w:r> runs by
-    Word, which a plain string replace could leave partially stale.
-
-    Formatting (paragraph spacing/alignment, font/color/size) is copied from
-    THIS resume's own existing summary paragraph, so a user's own styling
-    choices survive the edit — never a different resume's hardcoded look.
-    """
-    open_tag_m = re.match(r'<w:p[^>]*>', old_para)
-    open_tag = open_tag_m.group(0) if open_tag_m else '<w:p>'
-
-    ppr_m = re.search(r'<w:pPr>.*?</w:pPr>', old_para, re.S)
-    ppr = ppr_m.group(0) if ppr_m else _SUMMARY_PPR_FALLBACK
-
-    rpr_m = re.search(r'<w:rPr>.*?</w:rPr>', old_para, re.S)
-    rpr = rpr_m.group(0) if rpr_m else _SUMMARY_RPR_FALLBACK
-
-    escaped_text = _xml_escape(new_text)
-    return (
-        f'{open_tag}'
-        f'{ppr}'
-        f'<w:r>{rpr}'
-        f'<w:t xml:space="preserve">{escaped_text}</w:t>'
-        f'</w:r>'
-        f'</w:p>'
-    )
-
-
 def step4_apply_edits(
     analysis: dict,
     field_map: dict[str, str],
@@ -893,18 +822,6 @@ def step4_apply_edits(
     xml, total_success, total_attempted, total_unchanged = _apply_optimize_edits(
         xml, edits, field_map, config.progress
     )
-
-    # Summary: whole-paragraph rebuild anchored on heading position (see
-    # _build_summary_paragraph for why), not part of the generic field loop.
-    total_attempted += 1
-    old_para = _extract_xml_paragraph_after_heading(xml, 'PROFESSIONAL SUMMARY')
-    if old_para and analysis.get('summary'):
-        new_para = _build_summary_paragraph(old_para, analysis['summary'])
-        xml = xml.replace(old_para, new_para, 1)
-        total_success += 1
-        config.progress(f"  ✓ [summary] applied")
-    else:
-        config.progress(f"  ✗ NOT FOUND: [summary]")
 
     if colors:
         xml = apply_brand_colors(xml, colors)
@@ -3240,8 +3157,8 @@ def _build_resume_field_map(data: dict) -> dict[str, str]:
     fields: dict[str, str] = {}
     if data.get("tagline"):
         fields["tagline"] = data["tagline"]
-    if data.get("summary"):
-        fields["summary"] = data["summary"]
+    for i, item in enumerate(data.get("summary_items", []), start=1):
+        fields[f"summary_{i}"] = item["text"]
     for i, comp in enumerate(data.get("competencies", []), start=1):
         fields[f"competency_{i}"] = comp
     for j, job in enumerate(data.get("jobs", []), start=1):

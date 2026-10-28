@@ -75,7 +75,7 @@ Edit `unpacked/word/document.xml` using Python string replacement (not sed, not 
 
 **Always edit these sections in this order:**
 1. **Tagline** (line ~40) — 1 sentence, matches the framing angle
-2. **Professional Summary** (~line 449) — 4–5 sentences, written in Corey's voice
+2. **Professional Summary** (~line 449) — keep the master's structure (paragraph, bullets, or hybrid); rewrite each item in place in Corey's voice. If the master has no summary, add none
 3. **Core Competencies** — all 14 cells, mapped to the JD
 4. **eHealth job title** — update the subtitle bar if needed
 5. **eHealth bullets** — all 6, rewritten to match the framing angle

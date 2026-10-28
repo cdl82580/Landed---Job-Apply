@@ -101,7 +101,7 @@ def parse_xml(docx_path: Path) -> dict:
         "name": "",
         "contact_line": "",
         "tagline": "",
-        "summary": "",
+        "summary_items": [],   # list of {text, bullet}; empty if no summary section
         "competencies": [],
         "jobs": [],            # list of {company, title, dates, bullets}
         "education": [],       # list of {degree, school}
@@ -173,7 +173,9 @@ def parse_xml(docx_path: Path) -> dict:
 
             # Summary
             if section == "SUMMARY":
-                result["summary"] = " ".join(text.split())
+                result["summary_items"].append(
+                    {"text": clean_bullet_text(text), "bullet": is_bullet(child)}
+                )
 
             # Experience: bullets, plus a paragraph-based job-header layout
             # (bold "Company [| dates]" line, then an italic title line) —
@@ -363,8 +365,10 @@ def build_ats(data: dict, output_path: Path):
     add([tr(data["tagline"], italic=True)], after=160)
 
     # Summary
-    heading("Professional Summary")
-    body(data["summary"], after=0)
+    if data["summary_items"]:
+        heading("Professional Summary")
+        for item in data["summary_items"]:
+            bullet(item["text"]) if item["bullet"] else body(item["text"], after=0)
 
     # Competencies
     heading("Core Competencies")
@@ -470,7 +474,7 @@ def main():
     data = parse_xml(styled)
 
     print(f"  Tagline   : {data['tagline'][:60]}...")
-    print(f"  Summary   : {data['summary'][:60]}...")
+    print(f"  Summary   : {len(data['summary_items'])} item(s)")
     print(f"  Comps     : {len(data['competencies'])} cells")
     print(f"  Jobs      : {len(data['jobs'])} ({[j['company'] for j in data['jobs']]})")
     print(f"  Education : {len(data['education'])} entries")
